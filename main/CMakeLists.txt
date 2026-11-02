@@ -1199,9 +1199,8 @@ if(CONFIG_BOARD_TYPE_ESP32_P4_FUNCTION_EV_BOARD)
 endif()
 set(BOARD_EMBED_FILES "")
 if(CONFIG_BOARD_TYPE_SPOTPEAR_ESP32S3_LCD085)
-    list(APPEND BOARD_EMBED_FILES
-        "boards/spotpear/sp-esp32-s3-0.85-ai/pet_frames.bin"
-    )
+    # Pet animation frames ship in the assets partition, not the app image.
+    set(DEFAULT_ASSETS_EXTRA_FILES "${CMAKE_CURRENT_SOURCE_DIR}/boards/spotpear/sp-esp32-s3-0.85-ai/assets")
 endif()
 idf_component_register(SRCS ${SOURCES}
                     EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS} ${BOARD_EMBED_FILES}
@@ -1432,6 +1431,10 @@ function(build_default_assets_bin)
     # Add default assets extra files if defined
     if(DEFAULT_ASSETS_EXTRA_FILES)
         list(APPEND BUILD_ARGS "--extra_files" "${DEFAULT_ASSETS_EXTRA_FILES}")
+        file(GLOB DEFAULT_ASSETS_EXTRA_FILE_LIST
+            "${DEFAULT_ASSETS_EXTRA_FILES}/*"
+        )
+        list(APPEND DEFAULT_ASSETS_DEPENDENCIES ${DEFAULT_ASSETS_EXTRA_FILE_LIST})
     endif()
 
     list(APPEND BUILD_ARGS "--esp_sr_model_path" "${ESP_SR_MODEL_PATH}")

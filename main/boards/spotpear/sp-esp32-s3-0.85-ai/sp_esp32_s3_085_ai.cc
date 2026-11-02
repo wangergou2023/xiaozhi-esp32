@@ -2,6 +2,7 @@
 #include "codecs/es8311_audio_codec.h"
 #include "display/lcd_display.h"
 #include "application.h"
+#include "assets.h"
 #include "button.h"
 #include "config.h"
 #include "pet_frames.h"
@@ -19,10 +20,9 @@
 
 #define TAG "SpotpearS3_085AI"
 
-// The RGB565 frame blob is embedded by main/CMakeLists.txt (EMBED_FILES).
-extern "C" {
-extern const uint8_t pet_frames_blob[] asm("_binary_pet_frames_bin_start");
-}
+// Frame blob lives in the `assets` partition (packed by scripts/build_default_assets.py
+// through DEFAULT_ASSETS_EXTRA_FILES), so it does not consume app-image space.
+#define PET_ASSET_NAME "pet_frames.bin"
 
 class SpotpearS3_085AI : public WifiBoard {
 private:
@@ -94,15 +94,29 @@ private:
                                     DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
     }
 
-    // Copy the frame blob into PSRAM and build one LVGL image descriptor per frame.
-    bool InitializePetFrames() {
-        pet_data_ = (uint8_t*)heap_caps_malloc((size_t)PET_FRAME_COUNT * PET_FRAME_BYTES,
-                                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    // Pull the frame blob out of the assets partition and build one LVGL image
+    // descriptor per frame. The assets partition is mapped after boot, so this
+    // is retried from the periodic tick until it succeeds.
+    bool TryLoadPetFrames() {
+        if (pet_data_ != nullptr) {
+            return true;
+        }
+        void* ptr = nullptr;
+        size_t size = 0;
+        if (!Assets::GetInstance().GetAssetData(PET_ASSET_NAME, ptr, size)) {
+            return false;
+        }
+        const size_t need = (size_t)PET_FRAME_COUNT * PET_FRAME_BYTES;
+        if (ptr == nullptr || size < need) {
+            ESP_LOGE(TAG, "pet asset too small: %u < %u", (unsigned)size, (unsigned)need);
+            return false;
+        }
+        pet_data_ = (uint8_t*)heap_caps_malloc(need, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (pet_data_ == nullptr) {
             ESP_LOGE(TAG, "Not enough PSRAM for pet frames");
             return false;
         }
-        memcpy(pet_data_, pet_frames_blob, (size_t)PET_FRAME_COUNT * PET_FRAME_BYTES);
+        memcpy(pet_data_, ptr, need);
 
         for (int i = 0; i < PET_FRAME_COUNT; i++) {
             lv_image_dsc_t& d = pet_dsc_[i];
@@ -115,7 +129,8 @@ private:
             d.data_size = PET_FRAME_BYTES;
             d.data = pet_data_ + (size_t)i * PET_FRAME_BYTES;
         }
-        ESP_LOGI(TAG, "Pet frames loaded: %d frames, %d bytes each", PET_FRAME_COUNT, PET_FRAME_BYTES);
+        ESP_LOGI(TAG, "Pet frames loaded from assets: %d frames, %d bytes each",
+                 PET_FRAME_COUNT, PET_FRAME_BYTES);
         return true;
     }
 
@@ -160,12 +175,22 @@ private:
     }
 
     void UpdatePet() {
+        if (!TryLoadPetFrames()) {
+            return;
+        }
         auto& app = Application::GetInstance();
         DeviceState st = app.GetDeviceState();
-        bool show = PetShouldShow(st) && pet_img_ != nullptr;
+        bool show = PetShouldShow(st);
 
         if (!lvgl_port_lock(100)) {
             return;
+        }
+        if (pet_img_ == nullptr) {
+            pet_img_ = lv_animimg_create(lv_layer_top());
+            lv_obj_remove_style_all(pet_img_);
+            lv_obj_set_size(pet_img_, PET_FRAME_W, PET_FRAME_H);
+            lv_obj_align(pet_img_, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_add_flag(pet_img_, LV_OBJ_FLAG_HIDDEN);
         }
         if (show) {
             ApplyPetState(PetStateFor(st));
@@ -186,19 +211,6 @@ private:
     }
 
     void InitializePet() {
-        if (!InitializePetFrames()) {
-            return;
-        }
-        if (!lvgl_port_lock(1000)) {
-            return;
-        }
-        pet_img_ = lv_animimg_create(lv_layer_top());
-        lv_obj_remove_style_all(pet_img_);
-        lv_obj_set_size(pet_img_, PET_FRAME_W, PET_FRAME_H);
-        lv_obj_align(pet_img_, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_add_flag(pet_img_, LV_OBJ_FLAG_HIDDEN);
-        lvgl_port_unlock();
-
         esp_timer_create_args_t args = {};
         args.callback = &PetTimerCallback;
         args.arg = this;
