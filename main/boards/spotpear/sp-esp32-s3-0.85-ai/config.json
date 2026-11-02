@@ -1,0 +1,13 @@
+{
+    "manufacturer": "spotpear",
+    "type": "sp-esp32-s3-0.85-ai",
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "sp-esp32-s3-0.85-ai",
+            "sdkconfig_append": [
+                "CONFIG_LV_USE_ANIMIMG=y"
+            ]
+        }
+    ]
+}
