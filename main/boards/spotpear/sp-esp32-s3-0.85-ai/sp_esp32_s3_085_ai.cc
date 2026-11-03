@@ -5,6 +5,7 @@
 #include "button.h"
 #include "config.h"
 #include "pet_frames.h"
+#include "settings.h"
 
 #include <esp_log.h>
 #include <esp_heap_caps.h>
@@ -302,6 +303,12 @@ private:
 
 public:
     SpotpearS3_085AI() : boot_button_(BOOT_BUTTON_GPIO) {
+        // The display reads its theme from NVS when it is constructed, so the
+        // preference has to be written before InitializeLcdDisplay().
+        {
+            Settings settings("display", true);
+            settings.SetString("theme", "dark");
+        }
         InitializeI2c();
         InitializeSpi();
         InitializeLcdDisplay();

@@ -2,8 +2,8 @@
 #pragma once
 #include <stdint.h>
 
-#define PET_FRAME_W 88
-#define PET_FRAME_H 128
+#define PET_FRAME_W 128
+#define PET_FRAME_H 88
 #define PET_FRAME_BYTES 22528
 #define PET_FRAME_COUNT 57
 #define PET_STATE_COUNT 9

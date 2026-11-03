@@ -37,11 +37,13 @@
 #define DISPLAY_HEIGHT  128
 #define DISPLAY_MIRROR_X true
 #define DISPLAY_MIRROR_Y true
+// Rotate the panel 90 degrees. The panel is square (128x128), so the LVGL
+// resolution stays the same while the rendered content turns on its side.
 #define DISPLAY_SWAP_XY false
 #define DISPLAY_INVERT_COLOR  true
 #define DISPLAY_RGB_ORDER  LCD_RGB_ELEMENT_ORDER_BGR
-#define DISPLAY_OFFSET_X  0
-#define DISPLAY_OFFSET_Y  0
+#define DISPLAY_OFFSET_X  2
+#define DISPLAY_OFFSET_Y  1
 #define DISPLAY_SPI_MODE 0
 
 // ---- WS2812 RGB LED on GP13 ----
