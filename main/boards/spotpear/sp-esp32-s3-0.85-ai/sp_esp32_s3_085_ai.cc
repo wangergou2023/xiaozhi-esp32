@@ -1,10 +1,12 @@
 #include "wifi_board.h"
 #include "codecs/es8311_audio_codec.h"
 #include "display/lcd_display.h"
+#include "led/circular_strip.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
 #include "pet_frames.h"
+#include "glm_realtime.h"
 #include "settings.h"
 
 #include <esp_log.h>
@@ -97,6 +99,7 @@ private:
     int64_t wave_until_us_ = 0;
     DeviceState last_state_ = kDeviceStateUnknown;
     esp_timer_handle_t pet_timer_ = nullptr;
+    GlmRealtime* glm_ = nullptr;
 
     void InitializeI2c() {
         i2c_master_bus_config_t i2c_bus_cfg = {};
@@ -297,6 +300,12 @@ private:
                 EnterWifiConfigMode();
                 return;
             }
+            // GLM realtime mode: one click records a phrase and speaks the answer.
+            if (glm_ != nullptr && glm_->IsConfigured() &&
+                app.GetDeviceState() == kDeviceStateIdle) {
+                glm_->StartTurn();
+                return;
+            }
             app.ToggleChatState();
         });
     }
@@ -313,6 +322,7 @@ public:
         InitializeSpi();
         InitializeLcdDisplay();
         InitializePet();
+        glm_ = new GlmRealtime();
         InitializeButtons();
         GetBacklight()->RestoreBrightness();
     }
@@ -336,6 +346,13 @@ public:
 
     virtual Display* GetDisplay() override {
         return display_;
+    }
+
+    // Single WS2812B on GP13. CircularStrip drives it through the RMT
+    // peripheral and already maps device states to colours.
+    virtual Led* GetLed() override {
+        static CircularStrip led(RGB_LED_GPIO, 1);
+        return &led;
     }
 
     virtual Backlight* GetBacklight() override {
