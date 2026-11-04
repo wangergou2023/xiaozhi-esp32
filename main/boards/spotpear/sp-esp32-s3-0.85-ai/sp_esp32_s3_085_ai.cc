@@ -6,7 +6,6 @@
 #include "button.h"
 #include "config.h"
 #include "pet_frames.h"
-#include "glm_realtime.h"
 #include "settings.h"
 
 #include <esp_log.h>
@@ -99,7 +98,6 @@ private:
     int64_t wave_until_us_ = 0;
     DeviceState last_state_ = kDeviceStateUnknown;
     esp_timer_handle_t pet_timer_ = nullptr;
-    GlmRealtime* glm_ = nullptr;
 
     void InitializeI2c() {
         i2c_master_bus_config_t i2c_bus_cfg = {};
@@ -300,12 +298,6 @@ private:
                 EnterWifiConfigMode();
                 return;
             }
-            // GLM realtime mode: one click records a phrase and speaks the answer.
-            if (glm_ != nullptr && glm_->IsConfigured() &&
-                app.GetDeviceState() == kDeviceStateIdle) {
-                glm_->StartTurn();
-                return;
-            }
             app.ToggleChatState();
         });
     }
@@ -322,7 +314,6 @@ public:
         InitializeSpi();
         InitializeLcdDisplay();
         InitializePet();
-        glm_ = new GlmRealtime();
         InitializeButtons();
         GetBacklight()->RestoreBrightness();
     }
