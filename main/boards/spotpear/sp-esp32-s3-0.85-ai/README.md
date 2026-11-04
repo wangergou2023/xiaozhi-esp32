@@ -20,21 +20,3 @@ Pin assignment comes from the vendor schematic (`ESP32-S3-0.85-AI.pdf`), see `co
 `pet_frames.bin` holds 57 RGB565 frames (9 animation rows x 6/8/8/4/5/8/6/6/6),
 88x128 each, embedded through `EMBED_FILES`. Animation row is chosen from the
 server emotion first (4 s window) and the device state second.
-
-## GLM Realtime (optional)
-
-`glm_realtime.cc` talks to `wss://open.bigmodel.cn/api/paas/v4/realtime` with
-PCM16 16 kHz up / PCM 24 kHz down, so no Opus round trip is involved.
-
-- One BOOT click in the idle state records one phrase and plays the answer.
-- The API key is read from NVS (`Settings("glm")`, key `api_key`) and falls back
-  to `GLM_API_KEY` from a local `glm_key.h` that is **not** committed.
-- The audio service is stopped for the duration of a turn: two tasks reading the
-  same I2S channel makes the driver abort.
-
-### Local patch to a managed component
-
-Zhipu sends single audio frames well above 256 KB (observed 411 KB), which the
-bundled websocket client rejects. `managed_components/78__esp-ml307/include/web_socket.h`
-has `MAX_MESSAGE_SIZE` raised from 256 KB to 1 MB. That directory is not tracked
-by git, so the patch is lost if the component is reinstalled.
