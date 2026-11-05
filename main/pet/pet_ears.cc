@@ -117,7 +117,7 @@ bool Ears::Start() {
     if (model_data_ != nullptr && !commands_ready_) {
         const esp_mn_iface_t* iface = model_;
         chunk_samples_ = iface->get_samp_chunksize(model_data_);
-        iface->set_det_threshold(model_data_, 0.12f);
+        iface->set_det_threshold(model_data_, 0.05f);
         phrase_ = phrase();
         // The command list needs a root node before anything can be added; the
         // "clear" API silently refuses to work without it.
@@ -134,6 +134,12 @@ bool Ears::Start() {
     } else if (model_data_ == nullptr) {
         chunk_samples_ = kFallbackChunk;
         ESP_LOGW(TAG, "No command model: she will only notice loud noises");
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(ring_mutex_);
+        mic_ring_.assign(5 * kSampleRate, 0);  // five seconds of history
+        ring_write_ = 0;
     }
 
     codec->EnableInput(true);
@@ -158,6 +164,20 @@ void Ears::Stop() {
         static_cast<AudioCodec*>(codec_)->EnableInput(false);
     }
     ESP_LOGI(TAG, "Stopped listening");
+}
+
+bool Ears::Latest(size_t samples, std::vector<int16_t>& out) {
+    std::lock_guard<std::mutex> lock(ring_mutex_);
+    if (mic_ring_.empty() || samples == 0 || samples > mic_ring_.size()) {
+        return false;
+    }
+    out.resize(samples);
+    size_t read = (ring_write_ + mic_ring_.size() - samples) % mic_ring_.size();
+    for (size_t i = 0; i < samples; i++) {
+        out[i] = mic_ring_[read];
+        read = (read + 1) % mic_ring_.size();
+    }
+    return true;
 }
 
 bool Ears::UsePhrase(const std::string& phrase) {
@@ -242,6 +262,16 @@ void Ears::Run() {
             continue;
         }
 
+        {
+            std::lock_guard<std::mutex> lock(ring_mutex_);
+            if (!mic_ring_.empty()) {
+                for (int16_t sample : buffer) {
+                    mic_ring_[ring_write_] = sample;
+                    ring_write_ = (ring_write_ + 1) % mic_ring_.size();
+                }
+            }
+        }
+
         // Loud noise: still available when the command model is missing.
         double sum = 0.0;
         for (int16_t sample : buffer) {
@@ -276,13 +306,13 @@ void Ears::Run() {
             // Normalise to a comfortable level for the model. A quiet room
             // leaves the raw signal at a few hundred counts, and the command
             // model was trained on speech around a few thousand.
-            constexpr float kTargetRms = 3500.0f;
+            constexpr float kTargetRms = 6000.0f;
             const float chunk_rms = rms > 1.0f ? rms : 1.0f;
             float gain = kTargetRms / chunk_rms;
             if (gain < 1.0f) {
                 gain = 1.0f;
-            } else if (gain > 8.0f) {
-                gain = 8.0f;
+            } else if (gain > 12.0f) {
+                gain = 12.0f;
             }
             const int32_t model_gain = static_cast<int32_t>(gain * 100.0f);
             for (size_t i = 0; i < buffer.size(); i++) {

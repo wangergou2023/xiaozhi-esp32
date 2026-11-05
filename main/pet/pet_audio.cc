@@ -67,7 +67,7 @@ void PetAudio::Start() {
     // A hot microphone: her own speaker is quiet at conversational gain, and
     // the command-word model wants a normal level. This has to be set before
     // the codec device is opened (which happens on the first EnableOutput).
-    codec->SetInputGain(38);
+    codec->SetInputGain(42);
     codec->Start();
     codec->EnableOutput(true);
 

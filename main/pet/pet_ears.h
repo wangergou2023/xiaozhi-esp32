@@ -41,6 +41,10 @@ public:
     // recognise it" from "the room did not deliver it".
     std::string Recognize(const int16_t* samples, size_t count);
 
+    // Copy the most recent microphone audio out of the ring the ear task
+    // maintains. No second reader, so nothing competes for the codec.
+    bool Latest(size_t samples, std::vector<int16_t>& out);
+
     // Swap the command phrase at runtime (does not touch NVS). Used while
     // tuning, so a phrase can be tried without a rebuild.
     bool UsePhrase(const std::string& phrase);
@@ -62,6 +66,10 @@ private:
     model_iface_data_t* model_data_ = nullptr;
     int chunk_samples_ = 512;
     std::string phrase_;
+
+    std::mutex ring_mutex_;
+    std::vector<int16_t> mic_ring_;
+    size_t ring_write_ = 0;
 
     std::mutex model_mutex_;  // the task and Recognize must not detect at once
     std::mutex codec_mutex_;  // only one reader at a time (I2S RX is not shared)

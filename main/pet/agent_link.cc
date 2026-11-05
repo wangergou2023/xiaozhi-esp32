@@ -68,11 +68,19 @@ const char* GestureName(Gesture gesture) {
 // The same driver the console logs go through, so a line is never cut in half
 // by another writer.
 void WriteAll(const char* data, size_t length) {
+    int stalled = 0;
     while (length > 0) {
         const int written = usb_serial_jtag_write_bytes(data, length, pdMS_TO_TICKS(100));
         if (written <= 0) {
-            return;
+            // The TX ring is small; give it a moment instead of truncating the
+            // document, which the host would have to throw away.
+            if (++stalled > 50) {
+                return;
+            }
+            vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
         }
+        stalled = 0;
         data += written;
         length -= static_cast<size_t>(written);
     }
