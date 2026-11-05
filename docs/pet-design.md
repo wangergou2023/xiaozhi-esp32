@@ -361,3 +361,46 @@ WiFi 在本设计中**只是配网射频**，不是联网能力。
 - 画面观感（呼吸幅度、眨眼的观感、灯色）
 - BOOT 短按 / 双击 / 长按的实际手势判定（`iot_button` 的窗口参数没调过）
 - 拔掉 USB 后是否稳定回到 `autonomous`
+
+### V1 · 可被接管（已实现）
+
+`main/pet/agent_link.cc` 是第二个大脑：USB 串口上的一行一条 JSON-RPC 2.0。
+
+| 项 | 实现 |
+| --- | --- |
+| 传输 | USB-Serial/JTAG，和日志共用同一个口；不是 JSON 的行一律忽略 |
+| `pet.hello` | 返回名字、固件版本、能力表、完整状态；同时进入 `remote` |
+| 心跳 | 3 秒没有一行 JSON 就退出 `remote`，模式交还给「插没插 USB」的判断 |
+| 原语 | `pet.face` `pet.look` `pet.attention` `pet.status` `pet.feed` `pet.clean` `pet.play` `pet.task` `pet.sleep` `pet.wake` `pet.ping` |
+| 事件 | `pet.poke`（被摸）、`pet.state_changed`（数值/情绪/模式变了）、`pet.tired`（精力 < 15） |
+| 咬合 | `pet.task result=done` → 精力 −5、亲密度 +2；`result=error` → 精力 −8、亲密度 −1 |
+| 脚本 | `scripts/pet_agent.py` 假扮 host，把上面每一条都跑一遍 |
+
+与设计的偏差：
+
+1. **`pet.say` 没实现**（返回 -32601）。她要说话就得起音频栈，那是 V2 的事；
+   现在整机没有初始化 `AudioService`，是省电的一部分。
+2. **`pet.look` 是整脸平移**，不是眼珠转动 —— 眼睛在帧里，切不出来。±8 px。
+3. **代劳只补一半**（§10.3 那条限制）没做：agent 调 `pet.feed` 就是完整的 +25，
+   和手摸一样。这条等 V3 的手势一起做，否则没有对照。
+4. **独占 / 抢占**没做：谁的 `pet.hello` 最后到谁说了算，不区分连接。
+5. **控制台从 UART0 挪到了 USB-Serial/JTAG。** 之前 USB 只是第二控制台，
+   驱动没装、RX 的 64 字节 FIFO 没人取，host 一写就卡住。现在 USB 是唯一控制台，
+   固件在启动时就把驱动装好，`read()` 才有东西。代价是日志和 JSON 混在一个流里。
+
+硬件验证（2026-11-05，实测）：
+
+```
+-> {"jsonrpc":"2.0","id":1,"method":"pet.hello","params":{}}
+<- {"jsonrpc":"2.0","id":1,"result":{"ok":true,"name":"Kitty","firmware":"kitty-pet 0.2.0",
+    "capabilities":[...],"status":{"hunger":94,"energy":75,...,"mode":"remote"}}}
+<- {"jsonrpc":"2.0","method":"pet.state_changed","params":{...}}
+-> {"jsonrpc":"2.0","id":2,"method":"pet.task","params":{"result":"done"}}
+<- {"jsonrpc":"2.0","id":2,"result":{"energy":70,"affection":37,...}}   # 精力 75 -> 70
+-> 之后不再发任何东西
+<- I (3520) PetLink: Back on her own: heartbeat timeout
+<- I (3520) PetCore: Mode remote -> docked
+```
+
+`pet.say` 返回 -32601，未知方法同样；`pet.sleep`/`pet.wake` 让 `mood` 在
+`asleep` / `content` 之间切换，都被 `pet.state_changed` 报出来了。

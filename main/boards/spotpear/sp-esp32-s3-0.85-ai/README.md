@@ -37,3 +37,15 @@ until that is confirmed.
 
 The 57 frames live in `main/pet/assets/pet_frames.bin` and are embedded with
 `EMBED_FILES`; see `docs/pet-design.md` for what the design does with them.
+
+## Console
+
+`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`: the USB port is the only console. It has
+to be, because the host agent talks to the pet over that same port
+(`main/pet/agent_link.cc`) and the USB-Serial-JTAG driver only accepts writes from
+the host when somebody reads them. With the default UART0 console the USB port is
+just a secondary output: no driver is installed, the 64 byte RX FIFO fills up and
+the host's `write()` blocks forever.
+
+Logs and protocol lines share the stream. A host must ignore anything that does
+not parse as JSON.

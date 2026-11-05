@@ -31,6 +31,9 @@ public:
     void Freeze(Clip clip, int frame = 0);
     // Vertical breathing amplitude in pixels (0 disables the sway).
     void SetBreathing(float amplitude_px);
+    // Nudge the whole face by a few pixels. The eyes are part of the frame, so
+    // this is the only way she can "look" somewhere.
+    void SetLook(int dx, int dy);
     // Backlight level 0-100.
     void SetScreenLevel(uint8_t level);
     // LED colour, already dimmed by the caller.
@@ -53,6 +56,8 @@ private:
 
     float breath_px_ = 1.5f;
     float breath_phase_ = 0.0f;
+    int look_dx_ = 0;
+    int look_dy_ = 0;
 
     float blink_in_ = 4.0f;
     float blink_left_ = 0.0f;

@@ -7,7 +7,8 @@
             "name": "sp-esp32-s3-0.85-ai",
             "sdkconfig_append": [
                 "CONFIG_LV_USE_ANIMIMG=y",
-                "CONFIG_KITTY_PET_MODE=y"
+                "CONFIG_KITTY_PET_MODE=y",
+                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y"
             ]
         }
     ]

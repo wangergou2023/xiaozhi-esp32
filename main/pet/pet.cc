@@ -11,6 +11,7 @@
 #include "board.h"
 #include "display/display.h"
 #include "pet/lamp.h"
+#include "pet/agent_link.h"
 #include "pet/pet_action.h"
 #include "pet/pet_behavior.h"
 #include "pet/pet_core.h"
@@ -65,6 +66,8 @@ Look ReactionLook(Clip clip, int frame_ms, float seconds, const Status& status) 
 void HandleGesture(Gesture gesture) {
     auto& core = PetCore::Get();
     const Status& status = core.status();
+    // The host hears about every gesture, whether or not it owns the face.
+    AgentLink::Get().OnGesture(gesture, status);
 
     switch (gesture) {
         case Gesture::kBootClick:
@@ -162,6 +165,7 @@ void Run() {
         display->SetupUI();
     }
     g_action.Attach(display, g_lamp, board.GetBacklight());
+    AgentLink::Get().Start(&g_action);
 
     auto& core = PetCore::Get();
     core.Load();
@@ -180,6 +184,18 @@ void Run() {
         last_us = now_us;
 
         DrainGestures();
+
+        AgentLink::Get().Tick(dt);
+
+        // The host may take over or drop out at any tick, so the mode follows
+        // it directly instead of waiting for the slow USB poll.
+        if (AgentLink::Get().remote()) {
+            if (core.status().mode != Mode::kRemote) {
+                core.SetMode(Mode::kRemote);
+            }
+        } else if (core.status().mode == Mode::kRemote) {
+            core.SetMode(UsbHostAttached() ? Mode::kDocked : Mode::kAutonomous);
+        }
 
         usb_poll_left -= dt;
         if (usb_poll_left <= 0.0f) {
@@ -209,6 +225,7 @@ void Run() {
                      ToName(status.mood), status.hunger, status.energy, status.clean,
                      status.affection, ToName(status.stage), ToName(status.mode),
                      status.sleeping ? " | asleep" : "");
+            AgentLink::Get().OnStatusChanged(status);
         }
 
         if (g_reaction.left > 0.0f) {
@@ -228,7 +245,10 @@ void Run() {
             }
         }
 
-        ApplyLook(look);
+        // While a host owns the face it also owns the look; she keeps breathing.
+        if (!AgentLink::Get().OwnsFace()) {
+            ApplyLook(look);
+        }
         g_action.Tick(dt);
     }
 }

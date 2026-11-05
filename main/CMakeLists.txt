@@ -50,6 +50,7 @@ set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg"
 if(CONFIG_KITTY_PET_MODE)
     list(APPEND SOURCES
         "pet/pet.cc"
+        "pet/agent_link.cc"
         "pet/pet_action.cc"
         "pet/pet_behavior.cc"
         "pet/pet_core.cc"

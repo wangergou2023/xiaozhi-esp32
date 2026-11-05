@@ -1,5 +1,6 @@
 #include "pet/pet_action.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -169,6 +170,12 @@ void Action::SetBreathing(float amplitude_px) {
     breath_px_ = amplitude_px < 0.0f ? 0.0f : amplitude_px;
 }
 
+void Action::SetLook(int dx, int dy) {
+    constexpr int kMaxLook = 8;
+    look_dx_ = std::clamp(dx, -kMaxLook, kMaxLook);
+    look_dy_ = std::clamp(dy, -kMaxLook, kMaxLook);
+}
+
 void Action::SetScreenLevel(uint8_t level) {
     if (level > 100) {
         level = 100;
@@ -233,11 +240,12 @@ void Action::Tick(float dt) {
         }
     }
 
-    const int offset = static_cast<int>(lroundf(sinf(breath_phase_) * breath_px_));
+    const int offset = static_cast<int>(lroundf(sinf(breath_phase_) * breath_px_)) + look_dy_;
     const int32_t scale_y = blink_left_ > 0.0f ? kEyesClosed : kEyesOpen;
 
     DisplayLockGuard lock(display_);
     if (lock) {
+        lv_obj_set_style_translate_x(image_, look_dx_, 0);
         lv_obj_set_style_translate_y(image_, offset, 0);
         lv_obj_set_style_transform_scale_y(image_, scale_y, 0);
     }
