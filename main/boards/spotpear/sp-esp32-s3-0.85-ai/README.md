@@ -1,6 +1,7 @@
 # Spotpear ESP32-S3-0.85-AI
 
 0.85" 128x128 IPS panel, ES8311 codec + NS4150B amplifier, single WS2812B, no touch.
+Kitty uses this board as her body: the whole screen is her face.
 
 Pin assignment comes from the vendor schematic (`ESP32-S3-0.85-AI.pdf`), see `config.h`.
 
@@ -15,8 +16,24 @@ Pin assignment comes from the vendor schematic (`ESP32-S3-0.85-AI.pdf`), see `co
 - `PetLcdDisplay` suppresses the built-in emoji/status bar/chat text: the pet owns
   the whole screen.
 
-## Pet animation
+## Pet mode
 
-`pet_frames.bin` holds 57 RGB565 frames (9 animation rows x 6/8/8/4/5/8/6/6/6),
-88x128 each, embedded through `EMBED_FILES`. Animation row is chosen from the
-server emotion first (4 s window) and the device state second.
+`CONFIG_KITTY_PET_MODE` is on by default for this board. It skips the assistant
+application entirely (`main.cc` calls `kitty::Run()` instead of
+`Application::Initialize()`): no WiFi, no protocol, no activation, no OTA.
+
+Everything about the pet lives in [`main/pet/`](../../../../pet) — this board only
+supplies pins, the display, the LED and the buttons:
+
+- `InitializeLcdDisplay()` → `PetLcdDisplay`, which hides the assistant UI;
+- `StripLamp` adapts the single WS2812B to `kitty::Lamp`;
+- the BOOT button forwards `kBootClick` / `kBootDoubleClick` / `kBootLongPress` to
+  `kitty::OnGesture()`;
+- nothing else. No behaviour belongs in this file.
+
+POWER (GP2) is deliberately **not** wired: the design's open item 1 asks whether
+that pin is part of the power latch. Clean / play / night mode have no entry point
+until that is confirmed.
+
+The 57 frames live in `main/pet/assets/pet_frames.bin` and are embedded with
+`EMBED_FILES`; see `docs/pet-design.md` for what the design does with them.

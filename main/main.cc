@@ -9,6 +9,10 @@
 
 #include "application.h"
 
+#if CONFIG_KITTY_PET_MODE
+#include "pet/pet.h"
+#endif
+
 #define TAG "main"
 
 extern "C" void app_main(void)
@@ -22,8 +26,14 @@ extern "C" void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+#if CONFIG_KITTY_PET_MODE
+    // Desktop pet: no network, no protocol, no activation (docs/pet-design.md).
+    // Run() owns the main task and never returns.
+    kitty::Run();
+#else
     // Initialize and run the application
     auto& app = Application::GetInstance();
     app.Initialize();
     app.Run();  // This function runs the main event loop and never returns
+#endif
 }

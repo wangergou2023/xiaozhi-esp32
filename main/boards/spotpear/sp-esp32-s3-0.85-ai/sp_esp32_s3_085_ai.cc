@@ -2,15 +2,14 @@
 #include "codecs/es8311_audio_codec.h"
 #include "display/lcd_display.h"
 #include "led/circular_strip.h"
-#include "application.h"
 #include "button.h"
 #include "config.h"
-#include "pet_frames.h"
 #include "settings.h"
 
+#include "pet/lamp.h"
+#include "pet/pet.h"
+
 #include <esp_log.h>
-#include <esp_heap_caps.h>
-#include <esp_timer.h>
 #include <driver/i2c_master.h>
 #include <esp_lcd_panel_vendor.h>
 #include <esp_lcd_panel_io.h>
@@ -19,52 +18,28 @@
 #include <lvgl.h>
 #include "esp_lvgl_port.h"
 
-#include <cstring>
 #include <string>
 
 #define TAG "SpotpearS3_085AI"
 
-// Animation rows inside the spritesheet (see pet_frames.h).
-enum PetAnim {
-    kPetIdle = 0,
-    kPetRunRight = 1,
-    kPetRunLeft = 2,
-    kPetWave = 3,
-    kPetJump = 4,
-    kPetFail = 5,
-    kPetWait = 6,
-    kPetReview = 7,
-    kPetRun = 8,
-};
-
-// The RGB565 frame blob is embedded by main/CMakeLists.txt (EMBED_FILES).
-extern "C" {
-extern const uint8_t pet_frames_blob[] asm("_binary_pet_frames_bin_start");
-}
-
-// Kitty is the whole UI of this device, so the built-in display is stripped down:
-// no yellow noto emoji, no chat bubbles. Emotion updates are recorded here and
-// turned into animations by the board.
+// Kitty is the whole UI of this device, so the built-in display is stripped
+// down: no status bar, no noto emoji, no chat bubbles. Nothing above this layer
+// draws the pet; main/pet/ does that on lv_layer_top().
 class PetLcdDisplay : public SpiLcdDisplay {
 public:
-    std::string emotion;
-    int64_t emotion_at_us = 0;
-
     PetLcdDisplay(esp_lcd_panel_io_handle_t io, esp_lcd_panel_handle_t panel,
                   int width, int height, int offset_x, int offset_y,
                   bool mirror_x, bool mirror_y, bool swap_xy)
         : SpiLcdDisplay(io, panel, width, height, offset_x, offset_y,
                         mirror_x, mirror_y, swap_xy) {}
 
+    // Emotions come from the pet now. Accept and ignore whatever the assistant
+    // layer tries to set, so a stale server reply cannot overwrite her face.
     bool SetEmotion(const char* name) override {
-        if (name != nullptr) {
-            emotion = name;
-            emotion_at_us = esp_timer_get_time();
-        }
-        return true;  // handled by Kitty
+        (void)name;
+        return true;
     }
 
-    // Full-screen pet: the chat text would only cover her.
     void SetChatMessage(const char* role, const char* content) override {
         (void)role;
         (void)content;
@@ -84,20 +59,26 @@ public:
     }
 };
 
+// Adapter between the one WS2812 and the pet's narrow Lamp interface.
+class StripLamp : public kitty::Lamp {
+public:
+    explicit StripLamp(CircularStrip& strip) : strip_(strip) {}
+
+    void SetColor(uint8_t red, uint8_t green, uint8_t blue) override {
+        strip_.SetAllColor(StripColor{red, green, blue});
+    }
+
+private:
+    CircularStrip& strip_;
+};
+
 class SpotpearS3_085AI : public WifiBoard {
 private:
     i2c_master_bus_handle_t i2c_bus_ = nullptr;
     Button boot_button_;
     PetLcdDisplay* display_ = nullptr;
-
-    // --- pet animation state ---
-    uint8_t* pet_data_ = nullptr;
-    lv_obj_t* pet_img_ = nullptr;
-    static lv_image_dsc_t pet_dsc_[PET_FRAME_COUNT];
-    int pet_anim_ = -1;
-    int64_t wave_until_us_ = 0;
-    DeviceState last_state_ = kDeviceStateUnknown;
-    esp_timer_handle_t pet_timer_ = nullptr;
+    CircularStrip led_{RGB_LED_GPIO, 1};
+    StripLamp lamp_{led_};
 
     void InitializeI2c() {
         i2c_master_bus_config_t i2c_bus_cfg = {};
@@ -155,150 +136,16 @@ private:
                                      DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
     }
 
-    // Copy the frame blob into PSRAM and build one LVGL image descriptor per frame.
-    bool InitializePetFrames() {
-        pet_data_ = (uint8_t*)heap_caps_malloc((size_t)PET_FRAME_COUNT * PET_FRAME_BYTES,
-                                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (pet_data_ == nullptr) {
-            ESP_LOGE(TAG, "Not enough PSRAM for pet frames");
-            return false;
-        }
-        memcpy(pet_data_, pet_frames_blob, (size_t)PET_FRAME_COUNT * PET_FRAME_BYTES);
-
-        for (int i = 0; i < PET_FRAME_COUNT; i++) {
-            lv_image_dsc_t& d = pet_dsc_[i];
-            memset(&d, 0, sizeof(d));
-            d.header.magic = LV_IMAGE_HEADER_MAGIC;
-            d.header.cf = LV_COLOR_FORMAT_RGB565;
-            d.header.w = PET_FRAME_W;
-            d.header.h = PET_FRAME_H;
-            d.header.stride = PET_FRAME_W * 2;
-            d.data_size = PET_FRAME_BYTES;
-            d.data = pet_data_ + (size_t)i * PET_FRAME_BYTES;
-        }
-        ESP_LOGI(TAG, "Pet frames loaded: %d frames, %d bytes each", PET_FRAME_COUNT, PET_FRAME_BYTES);
-        return true;
-    }
-
-    void PlayAnim(int anim, int frame_ms) {
-        if (anim == pet_anim_ || pet_img_ == nullptr) {
-            return;
-        }
-        pet_anim_ = anim;
-        int first = pet_state_first[anim];
-        int count = pet_state_frames[anim];
-        static const void* srcs[8];
-        for (int i = 0; i < count && i < 8; i++) {
-            srcs[i] = &pet_dsc_[first + i];
-        }
-        lv_animimg_set_src(pet_img_, srcs, count);
-        lv_animimg_set_duration(pet_img_, count * frame_ms);
-        lv_animimg_set_repeat_count(pet_img_, LV_ANIM_REPEAT_INFINITE);
-        lv_animimg_start(pet_img_);
-        ESP_LOGI(TAG, "Pet -> %s (%d frames)", pet_state_names[anim], count);
-    }
-
-    // Server emotions take priority; they fade out after a few seconds.
-    static int AnimForEmotion(const std::string& e) {
-        if (e.empty()) return -1;
-        if (e == "happy" || e == "laughing" || e == "funny" || e == "loving" ||
-            e == "kissy" || e == "delicious" || e == "confident" || e == "cool" ||
-            e == "relaxed" || e == "surprised" || e == "shocked") {
-            return kPetJump;
-        }
-        if (e == "sad" || e == "crying" || e == "sleepy" || e == "embarrassed" ||
-            e == "angry") {
-            return kPetFail;
-        }
-        if (e == "thinking" || e == "confused") {
-            return kPetReview;
-        }
-        return -1;  // winking / silly / neutral: fall through to the device state
-    }
-
-    static int AnimForState(DeviceState s) {
-        switch (s) {
-            case kDeviceStateSpeaking:
-                return kPetRun;
-            case kDeviceStateListening:
-            case kDeviceStateConnecting:
-            case kDeviceStateActivating:
-            case kDeviceStateStarting:
-            case kDeviceStateWifiConfiguring:
-                return kPetWait;
-            case kDeviceStateUpgrading:
-                return kPetReview;
-            case kDeviceStateFatalError:
-                return kPetFail;
-            default:
-                return kPetIdle;
-        }
-    }
-
-    void UpdatePet() {
-        auto& app = Application::GetInstance();
-        DeviceState st = app.GetDeviceState();
-        int64_t now = esp_timer_get_time();
-
-        // Wave once when the conversation starts.
-        if (st == kDeviceStateListening && last_state_ != kDeviceStateListening) {
-            wave_until_us_ = now + 900 * 1000;
-        }
-        last_state_ = st;
-
-        int anim;
-        if (now < wave_until_us_) {
-            anim = kPetWave;
-        } else {
-            int by_emotion = -1;
-            if (now - display_->emotion_at_us < 4 * 1000 * 1000) {
-                by_emotion = AnimForEmotion(display_->emotion);
-            }
-            anim = by_emotion >= 0 ? by_emotion : AnimForState(st);
-        }
-
-        // Speaking should feel livelier than idle.
-        int frame_ms = (anim == kPetRun) ? 70 : 110;
-
-        if (!lvgl_port_lock(100)) {
-            return;
-        }
-        PlayAnim(anim, frame_ms);
-        lvgl_port_unlock();
-    }
-
-    static void PetTimerCallback(void* arg) {
-        static_cast<SpotpearS3_085AI*>(arg)->UpdatePet();
-    }
-
-    void InitializePet() {
-        if (!InitializePetFrames()) {
-            return;
-        }
-        if (lvgl_port_lock(1000)) {
-            pet_img_ = lv_animimg_create(lv_layer_top());
-            lv_obj_remove_style_all(pet_img_);
-            lv_obj_set_size(pet_img_, PET_FRAME_W, PET_FRAME_H);
-            lv_obj_align(pet_img_, LV_ALIGN_CENTER, 0, 0);
-            lvgl_port_unlock();
-        }
-
-        esp_timer_create_args_t args = {};
-        args.callback = &PetTimerCallback;
-        args.arg = this;
-        args.name = "pet_tick";
-        ESP_ERROR_CHECK(esp_timer_create(&args, &pet_timer_));
-        ESP_ERROR_CHECK(esp_timer_start_periodic(pet_timer_, 150 * 1000));
-    }
-
+    // Wiring only: every gesture is forwarded to the pet, which owns the logic.
     void InitializeButtons() {
-        boot_button_.OnClick([this]() {
-            auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting) {
-                EnterWifiConfigMode();
-                return;
-            }
-            app.ToggleChatState();
+        boot_button_.OnClick([]() {
+            kitty::OnGesture(kitty::Gesture::kBootClick);
+        });
+        boot_button_.OnDoubleClick([]() {
+            kitty::OnGesture(kitty::Gesture::kBootDoubleClick);
+        });
+        boot_button_.OnLongPress([]() {
+            kitty::OnGesture(kitty::Gesture::kBootLongPress);
         });
     }
 
@@ -313,9 +160,10 @@ public:
         InitializeI2c();
         InitializeSpi();
         InitializeLcdDisplay();
-        InitializePet();
         InitializeButtons();
+        kitty::RegisterLamp(&lamp_);
         GetBacklight()->RestoreBrightness();
+        ESP_LOGI(TAG, "Board initialised");
     }
 
     virtual AudioCodec* GetAudioCodec() override {
@@ -340,10 +188,9 @@ public:
     }
 
     // Single WS2812B on GP13. CircularStrip drives it through the RMT
-    // peripheral and already maps device states to colours.
+    // peripheral; the pet talks to it through StripLamp above.
     virtual Led* GetLed() override {
-        static CircularStrip led(RGB_LED_GPIO, 1);
-        return &led;
+        return &led_;
     }
 
     virtual Backlight* GetBacklight() override {
@@ -351,7 +198,5 @@ public:
         return &backlight;
     }
 };
-
-lv_image_dsc_t SpotpearS3_085AI::pet_dsc_[PET_FRAME_COUNT];
 
 DECLARE_BOARD(SpotpearS3_085AI);

@@ -45,6 +45,20 @@ set(SOURCES "audio/audio_codec.cc"
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
 
+# The pet is a self-contained body (docs/pet-design.md §5). It replaces the
+# assistant application on boards that ship as a desktop pet.
+if(CONFIG_KITTY_PET_MODE)
+    list(APPEND SOURCES
+        "pet/pet.cc"
+        "pet/pet_action.cc"
+        "pet/pet_behavior.cc"
+        "pet/pet_core.cc"
+        "pet/pet_expression.cc"
+        "pet/pet_types.cc"
+    )
+    list(APPEND INCLUDE_DIRS "pet")
+endif()
+
 # Add board common files
 list(APPEND SOURCES
     "boards/common/board.cc"
@@ -1198,9 +1212,9 @@ if(CONFIG_BOARD_TYPE_ESP32_P4_FUNCTION_EV_BOARD)
     )
 endif()
 set(BOARD_EMBED_FILES "")
-if(CONFIG_BOARD_TYPE_SPOTPEAR_ESP32S3_LCD085)
+if(CONFIG_KITTY_PET_MODE)
     list(APPEND BOARD_EMBED_FILES
-        "boards/spotpear/sp-esp32-s3-0.85-ai/pet_frames.bin"
+        "pet/assets/pet_frames.bin"
     )
 endif()
 idf_component_register(SRCS ${SOURCES}
@@ -1214,6 +1228,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_eth
                         esp_driver_gpio
                         esp_driver_uart
+                        esp_driver_usb_serial_jtag
                         esp_driver_spi
                         esp_driver_i2c
                         esp_driver_i2s
