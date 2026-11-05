@@ -447,6 +447,13 @@ void AgentLink::OnGesture(Gesture gesture, const Status& status) {
     SendEvent("pet.poke", params);
 }
 
+void AgentLink::OnCalled() {
+    if (!remote_) {
+        return;
+    }
+    SendEvent("pet.called", cJSON_CreateObject());
+}
+
 void AgentLink::OnStatusChanged(const Status& status) {
     if (!remote_) {
         return;

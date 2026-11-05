@@ -13,6 +13,7 @@
 
 #include "board.h"
 #include "pet/pet_audio.h"
+#include "pet/pet_ears.h"
 #include "pet/pet_core.h"
 
 namespace kitty {
@@ -157,6 +158,8 @@ std::string Page() {
             std::string(sleep_start) + "\">";
     html += "<label>作息：几点起</label><input name=\"sleep_end\" type=\"time\" value=\"" +
             std::string(sleep_end) + "\">";
+    html += "<label>唤醒词（拼音，例如 xiao mi）</label><input name=\"wake_phrase\" value=\"" +
+            Escape(Ears::Get().phrase()) + "\">";
     html += "<label>对时（留空就不改）</label>"
             "<input name=\"clock\" type=\"datetime-local\">";
     html += "<button type=\"submit\">保存</button></form></body></html>";
@@ -362,6 +365,13 @@ void Gateway::ApplyForm(const std::string& body) {
     const int hours_start = ParseMinutes(FormField(body, "sleep_start"), core.sleep_start_minute());
     const int hours_end = ParseMinutes(FormField(body, "sleep_end"), core.sleep_end_minute());
     core.SetSleepWindow(hours_start, hours_end);
+
+    const std::string wake_phrase = FormField(body, "wake_phrase");
+    if (!wake_phrase.empty() && wake_phrase != Ears::Get().phrase()) {
+        Ears::Get().Stop();
+        Ears::Get().SetPhrase(wake_phrase);
+        Ears::Get().Start();
+    }
 
     const std::string clock = FormField(body, "clock");
     if (!clock.empty()) {

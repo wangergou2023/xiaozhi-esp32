@@ -481,3 +481,30 @@ I (19640) PetGateway: Configuration AP down        # 保存后 1.6 秒射频关�
 
 代劳上限实测：`pet.feed` 在她饱食 99 时被拒绝（"already full enough"），
 `pet.play` 只加 1 点亲密度（人的三倍是一半的三倍）。
+
+### V2 后续 · 她听见了，但还听不懂名字
+
+`main/pet/pet_ears.cc` 已经给麦克风开了一条通路：一个 32 ms 一帧的采集任务，
+算 RMS、维护一个缓慢的房间噪声基线，超过阈值就"吓一跳"。
+
+```
+I (341) PetEars: No command model: she will only notice loud noises
+I (361) PetEars: Sound: rms 21663 (floor 727, trigger 4200)
+I (371) PetEars: Loud noise: rms 21663 (floor 727)
+```
+
+唤醒词（MultiNet 中文命令词）做到了哪一步，为什么停在这里：
+
+1. **模型放得下。** 打开 `CONFIG_SR_MN_CN_MULTINET7_QUANT=y` 后固件从 3.15 MB 长到 3.34 MB，
+   离 4 MB 分区还很远。
+2. **但模型不在固件里，而在资源包里。** 这一版 esp-sr（2.4.7）的 `esp_mn_handle_from_name()`
+   会去 `/srmodel/mn7_cn/mn7_index` 找文件，找不到就**不返回**（板子直接卡死在那里，
+   日志停在 `Please check if there are target files in /srmodel/mn7_cn/mn7_index`）。
+3. **资源包里没有它。** 当前的 `generated_assets.bin` 只打了 WakeNet 的 `srmodels.bin`
+   （里面有 `wn9`，没有 `mn7`）。要真的认名字，需要：
+   - 让 `scripts/build_default_assets.py` 把 MultiNet 模型一起打进 srmodels；
+   - 运行期挂载 assets 分区、`srmodel_load()` 出 model list、再 `esp_srmodel_filter()`；
+   - 这条链要动资源生成脚本，属于独立的一块工作。
+
+所以这一版她的耳朵只做"有没有声音"，不做"是谁在叫"。这是刻意的取舍：
+宁可功能少一项，也不要留一条会在开机时卡死的路径。

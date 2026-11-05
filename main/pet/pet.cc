@@ -14,6 +14,7 @@
 #include "pet/agent_link.h"
 #include "pet/pet_action.h"
 #include "pet/pet_audio.h"
+#include "pet/pet_ears.h"
 #include "pet/pet_gateway.h"
 #include "pet/pet_behavior.h"
 #include "pet/pet_core.h"
@@ -78,11 +79,15 @@ void ApplyNight(bool on, const char* why) {
     if (on) {
         core.ForceSleep();
         PetAudio::Get().SetNight(true);
+        // The microphone goes off with the lights: nothing to hear at night,
+        // and the radio-free part of the power budget matters most here.
+        Ears::Get().Stop();
         ESP_LOGI(TAG, "Night mode on (%s)", why);
     } else {
         core.ForceWake();
         PetAudio::Get().SetNight(false);
         PetAudio::Get().Play(Voice::kHappy);
+        Ears::Get().Start();
         ESP_LOGI(TAG, "Night mode off (%s)", why);
     }
 }
@@ -214,6 +219,7 @@ void Run() {
     }
     g_action.Attach(display, g_lamp, board.GetBacklight());
     PetAudio::Get().Start();
+    Ears::Get().Start();
     AgentLink::Get().Start(&g_action);
 
     auto& core = PetCore::Get();
@@ -244,6 +250,26 @@ void Run() {
             }
         } else if (core.status().mode == Mode::kRemote) {
             core.SetMode(UsbHostAttached() ? Mode::kDocked : Mode::kAutonomous);
+        }
+
+        switch (Ears::Get().TakeEvent()) {
+            case Ears::Event::kCalled: {
+                // She heard her name: look up, chirp, tell the host.
+                core.Poke();
+                PetAudio::Get().Play(Voice::kHappy);
+                ReactionLook(Clip::kWave, 110, 1.6f, core.status());
+                g_action.SetLook(0, -3);
+                AgentLink::Get().OnCalled();
+                break;
+            }
+            case Ears::Event::kStartled: {
+                PetAudio::Get().Play(Voice::kSigh);
+                ReactionLook(Clip::kReview, 160, 1.2f, core.status());
+                break;
+            }
+            case Ears::Event::kNone:
+            default:
+                break;
         }
 
         Gateway::Get().Tick(dt);

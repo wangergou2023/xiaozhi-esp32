@@ -36,6 +36,8 @@ public:
 
     // Report a human interaction and a change of her numbers to the host.
     void OnGesture(Gesture gesture, const Status& status);
+    // She heard her name through the microphone.
+    void OnCalled();
     void OnStatusChanged(const Status& status);
 
 private:
