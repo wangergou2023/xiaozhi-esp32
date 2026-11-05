@@ -64,6 +64,10 @@ void PetAudio::Start() {
         return;
     }
     codec_ = codec;
+    // A hot microphone: her own speaker is quiet at conversational gain, and
+    // the command-word model wants a normal level. This has to be set before
+    // the codec device is opened (which happens on the first EnableOutput).
+    codec->SetInputGain(38);
     codec->Start();
     codec->EnableOutput(true);
 
@@ -197,6 +201,18 @@ void PetAudio::Fill(int16_t* out, int samples) {
             mixed += low_pass_ * (0.10f + 0.55f * swell);
         }
 
+        // Host-pushed PCM plays on top of everything else.
+        {
+            std::lock_guard<std::mutex> lock(pcm_mutex_);
+            while (!pcm_queue_.empty() && pcm_offset_ >= pcm_queue_.front().size()) {
+                pcm_queue_.pop_front();
+                pcm_offset_ = 0;
+            }
+            if (!pcm_queue_.empty()) {
+                mixed += static_cast<float>(pcm_queue_.front()[pcm_offset_++]) / 32768.0f;
+            }
+        }
+
         mixed += VoiceSample();
 
         if (mixed > 1.0f) {
@@ -214,6 +230,18 @@ void PetAudio::Play(Voice voice) {
     }
     const int requested = static_cast<int>(voice);
     xQueueSend((QueueHandle_t)queue_, &requested, 0);
+}
+
+void PetAudio::PlayPcm(std::vector<int16_t>&& samples) {
+    if (!started_ || samples.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(pcm_mutex_);
+    constexpr size_t kMaxQueued = 6;
+    if (pcm_queue_.size() >= kMaxQueued) {
+        pcm_queue_.pop_front();
+    }
+    pcm_queue_.push_back(std::move(samples));
 }
 
 void PetAudio::SetNight(bool on) {

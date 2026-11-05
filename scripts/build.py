@@ -349,6 +349,20 @@ def _wake_word_sdkconfig_options(
         "CONFIG_USE_CUSTOM_WAKE_WORD=n",
     ]
 
+    if normalized in {"custom", "multinet"}:
+        # Multinet command words: the phrase itself comes from
+        # CONFIG_CUSTOM_WAKE_WORD, which a variant sets in sdkconfig_append.
+        options.extend(
+            (
+                "CONFIG_USE_CUSTOM_WAKE_WORD=y",
+                "CONFIG_SR_MN_CN_MULTINET7_QUANT=y",
+            )
+        )
+        return normalized, options, [
+            "CONFIG_USE_CUSTOM_WAKE_WORD",
+            "CONFIG_SR_MN_CN_MULTINET7_QUANT",
+        ]
+
     if normalized == "disabled":
         options.append("CONFIG_WAKE_WORD_DISABLED=y")
         return normalized, options, ["CONFIG_WAKE_WORD_DISABLED"]
@@ -1613,6 +1627,12 @@ def build_board(
         )
         wake_word_supported = _board_supports_wake_word(target, sdkconfig_append)
         requested_wake_word = wake_word
+        if requested_wake_word is None:
+            # A variant may pin its own wake word in config.json; without this a
+            # board that needs the Multinet engine could only be built by hand.
+            variant_wake_word = build.get("wake_word")
+            if isinstance(variant_wake_word, str) and variant_wake_word.strip():
+                requested_wake_word = variant_wake_word
         if requested_wake_word is None:
             requested_wake_word = "disabled"
             if wake_word_supported:

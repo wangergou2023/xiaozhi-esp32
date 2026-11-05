@@ -2,6 +2,9 @@
 #define KITTY_PET_AUDIO_H_
 
 #include <cstdint>
+#include <deque>
+#include <mutex>
+#include <vector>
 
 namespace kitty {
 
@@ -31,6 +34,10 @@ public:
     // Interrupt whatever she is saying with a new noise.
     void Play(Voice voice);
 
+    // Push 16 kHz mono PCM for her to say. Used by the host (pet.say) and by
+    // anything else that has real audio to give her.
+    void PlayPcm(std::vector<int16_t>&& samples);
+
     // Night mode swaps the voice for an algorithmic bed: slow breathing hiss.
     void SetNight(bool on);
 
@@ -57,6 +64,9 @@ private:
     void* task_ = nullptr;    // TaskHandle_t
 
     VoiceState voice_{};
+    std::mutex pcm_mutex_;
+    std::deque<std::vector<int16_t>> pcm_queue_;
+    size_t pcm_offset_ = 0;
     int sample_rate_ = 16000;
     int volume_ = 60;
 

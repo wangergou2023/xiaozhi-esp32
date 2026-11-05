@@ -482,7 +482,7 @@ I (19640) PetGateway: Configuration AP down        # 保存后 1.6 秒射频关�
 代劳上限实测：`pet.feed` 在她饱食 99 时被拒绝（"already full enough"），
 `pet.play` 只加 1 点亲密度（人的三倍是一半的三倍）。
 
-### V2 后续 · 她听见了，但还听不懂名字
+### V2 后续 · 耳朵与命令词
 
 `main/pet/pet_ears.cc` 已经给麦克风开了一条通路：一个 32 ms 一帧的采集任务，
 算 RMS、维护一个缓慢的房间噪声基线，超过阈值就"吓一跳"。
@@ -506,5 +506,27 @@ I (371) PetEars: Loud noise: rms 21663 (floor 727)
    - 运行期挂载 assets 分区、`srmodel_load()` 出 model list、再 `esp_srmodel_filter()`；
    - 这条链要动资源生成脚本，属于独立的一块工作。
 
-所以这一版她的耳朵只做"有没有声音"，不做"是谁在叫"。这是刻意的取舍：
-宁可功能少一项，也不要留一条会在开机时卡死的路径。
+后来这条链已经接通了（见下面"唤醒词"一节），剩下的只是"识别率"问题。
+
+## 唤醒词 · 现在的样子
+
+| 件 | 状态 |
+| --- | --- |
+| 模型 | `CONFIG_SR_MN_CN_MULTINET7_QUANT=y`，`config.json` 里 `"wake_word": "custom"` |
+| 资源 | 构建时把 `mn7_cn` + `fst` 打进 `srmodels.bin`（资源包 1.2 MB → 3.6 MB，8 MB 分区够用） |
+| 加载 | `Ears::Start()` 读 `index.json` → `srmodel_load()` → `esp_srmodel_filter("mn","cn")` |
+| 命令词 | NVS `wake_phrase`（默认 `ni hao xiao mi`），`esp_mn_commands_alloc/add/update` |
+| 采音 | 16 kHz 单声道，32 ms 一帧；麦克风增益 38 dB，送模型前再放大 3 倍 |
+| 回调 | 命中 → 抬头、两声雀跃、`pet.called` 事件推给 host |
+
+`scripts/build.py` 加了一个 `custom` 唤醒词档位，并且允许 variant 在 `config.json` 里用
+`"wake_word"` 指定自己的唤醒词 —— 否则这个组合只能靠手敲 menuconfig 复现。
+
+还有两件事要说清楚：
+
+1. **识别率没在真人身上验证过。** 我手上的唯一声源是笔记本 SPDIF（没接音箱，实测无声）
+   和板子自己的小喇叭。用 TTS 把"你好小咪"推给她、从自己的喇叭放出来再自己听，
+   能量是够的（rms 1560），但模型没命中 —— 这不代表真人说话也不行，
+   只是我这边没法证明。**需要人对着板子说一句。**
+2. **`pet.say` 顺手做出来了**：一行一条 base64 PCM16，单条上限 12 KB（约 0.3 秒），
+   host 分片推。这也算把 V1 里"agent 推音频让她说话"那条补上了。

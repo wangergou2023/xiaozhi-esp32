@@ -2,13 +2,18 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
+
+#include <esp_heap_caps.h>
 
 #include <driver/usb_serial_jtag.h>
+#include <mbedtls/base64.h>
 #include <driver/usb_serial_jtag_vfs.h>
 #include <freertos/FreeRTOS.h>
 #include <esp_log.h>
 
 #include "pet/pet_action.h"
+#include "pet/pet_audio.h"
 #include "pet/pet_core.h"
 #include "pet/pet_gateway.h"
 
@@ -23,7 +28,7 @@ constexpr const char* kFirmware = "kitty-pet 0.2.0";
 const char* const kCapabilities[] = {
     "pet.face", "pet.look", "pet.attention", "pet.status", "pet.feed",
     "pet.clean", "pet.play", "pet.task", "pet.sleep", "pet.wake", "pet.night",
-    "pet.time", "pet.config", "pet.ping",
+    "pet.time", "pet.config", "pet.volume", "pet.say", "pet.ping",
 };
 
 // The art has no emotion faces, so a requested emotion picks the closest
@@ -111,7 +116,23 @@ void AgentLink::Start(Action* action) {
         }
     }
     usb_serial_jtag_vfs_use_driver();
-    ESP_LOGI(TAG, "Listening on the USB serial port for a host");
+    // One pet.say line can be ~100 KB of base64; PSRAM keeps that out of
+    // internal RAM.
+    // PSRAM is nearly full on this board (LVGL pool + image cache + frames +
+    // the command model), so try a big enough buffer for one streamed chunk and
+    // fall back to internal RAM.
+    rx_capacity_ = 16 * 1024;
+    rx_ = static_cast<char*>(heap_caps_malloc(rx_capacity_, MALLOC_CAP_SPIRAM));
+    if (rx_ == nullptr) {
+        rx_ = static_cast<char*>(heap_caps_malloc(rx_capacity_, MALLOC_CAP_8BIT));
+    }
+    if (rx_ == nullptr) {
+        ESP_LOGE(TAG, "No memory for the line buffer");
+        return;
+    }
+    ESP_LOGI(TAG, "Listening on the USB serial port for a host (line buffer %u)",
+             static_cast<unsigned>(rx_capacity_));
+    xTaskCreate(ReaderEntry, "pet_link", 4096, this, 6, (TaskHandle_t*)&reader_);
 }
 
 bool AgentLink::OwnsFace() const {
@@ -133,27 +154,54 @@ void AgentLink::Tick(float dt) {
         face_hold_ -= dt;
     }
 
-    char chunk[128];
-    int received = 0;
-    while ((received = usb_serial_jtag_read_bytes(chunk, sizeof(chunk), 0)) > 0) {
+    std::string line;
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock(lines_mutex_);
+            if (lines_.empty()) {
+                break;
+            }
+            line = std::move(lines_.front());
+            lines_.pop_front();
+        }
+        HandleLine(line.data());
+    }
+
+    if (remote_ && since_rx_ > kHeartbeatTimeout) {
+        ExitRemote("heartbeat timeout");
+    }
+}
+
+void AgentLink::ReaderEntry(void* arg) {
+    static_cast<AgentLink*>(arg)->ReadLoop();
+}
+
+void AgentLink::ReadLoop() {
+    char chunk[256];
+    while (true) {
+        const int received = usb_serial_jtag_read_bytes(chunk, sizeof(chunk), 0);
+        if (received <= 0) {
+            vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
+        }
         for (int i = 0; i < received; i++) {
             const char c = chunk[i];
             if (c == '\n' || c == '\r') {
                 if (rx_len_ > 0) {
                     rx_[rx_len_] = '\0';
-                    HandleLine(rx_);
+                    std::lock_guard<std::mutex> lock(lines_mutex_);
+                    if (lines_.size() >= 2) {
+                        lines_.pop_front();  // a slow body loop must not grow this
+                    }
+                    lines_.emplace_back(rx_);
                     rx_len_ = 0;
                 }
-            } else if (rx_len_ < sizeof(rx_) - 1) {
+            } else if (rx_len_ + 1 < rx_capacity_) {
                 rx_[rx_len_++] = c;
             } else {
                 rx_len_ = 0;  // oversized line: drop it and resynchronise
             }
         }
-    }
-
-    if (remote_ && since_rx_ > kHeartbeatTimeout) {
-        ExitRemote("heartbeat timeout");
     }
 }
 
@@ -296,6 +344,19 @@ void AgentLink::HandleLine(char* line) {
         return;
     }
 
+    if (name == "pet.volume") {
+        const cJSON* value = cJSON_GetObjectItem(params, "value");
+        if (!cJSON_IsNumber(value)) {
+            fail(-32602, "value (0-100) is required");
+            return;
+        }
+        PetAudio::Get().SetVolume(static_cast<int>(value->valuedouble));
+        cJSON* result = cJSON_CreateObject();
+        cJSON_AddNumberToObject(result, "volume", PetAudio::Get().volume());
+        reply(result);
+        return;
+    }
+
     if (name == "pet.face") {
         const cJSON* emotion = cJSON_GetObjectItem(params, "emotion");
         const cJSON* intensity = cJSON_GetObjectItem(params, "intensity");
@@ -339,16 +400,19 @@ void AgentLink::HandleLine(char* line) {
 
     if (name == "pet.feed") {
         core.Feed(true);
+        PetAudio::Get().Play(Voice::kChew);
         reply(StatusJson(core.status()));
         return;
     }
     if (name == "pet.clean") {
         core.Clean(true);
+        PetAudio::Get().Play(Voice::kPurr);
         reply(StatusJson(core.status()));
         return;
     }
     if (name == "pet.play") {
         core.Play(true);
+        PetAudio::Get().Play(Voice::kHappy);
         reply(StatusJson(core.status()));
         return;
     }
@@ -381,7 +445,35 @@ void AgentLink::HandleLine(char* line) {
     }
 
     if (name == "pet.say") {
-        fail(-32601, "pet.say needs the audio stack; this build does not start it");
+        // Base64 mono PCM16 at 16 kHz. The host owns the resampling.
+        const cJSON* pcm = cJSON_GetObjectItem(params, "pcm");
+        if (!cJSON_IsString(pcm)) {
+            fail(-32602, "pcm (base64 mono pcm16 at 16 kHz) is required");
+            return;
+        }
+        const size_t encoded_len = strlen(pcm->valuestring);
+        // One chunk per call; the host streams a sentence in pieces.
+        if (encoded_len == 0 || encoded_len > 12 * 1024) {
+            fail(-32602, "pcm must be at most 12 KB of base64 per call (about 0.3 s)");
+            return;
+        }
+        std::vector<unsigned char> raw(encoded_len);
+        size_t decoded_len = 0;
+        if (mbedtls_base64_decode(raw.data(), raw.size(), &decoded_len,
+                                  reinterpret_cast<const unsigned char*>(pcm->valuestring),
+                                  encoded_len) != 0 ||
+            decoded_len < 2) {
+            fail(-32602, "pcm is not valid base64");
+            return;
+        }
+        std::vector<int16_t> samples(decoded_len / 2);
+        memcpy(samples.data(), raw.data(), samples.size() * sizeof(int16_t));
+        const size_t sample_count = samples.size();
+        PetAudio::Get().PlayPcm(std::move(samples));
+        cJSON* result = cJSON_CreateObject();
+        cJSON_AddBoolToObject(result, "ok", true);
+        cJSON_AddNumberToObject(result, "samples", static_cast<double>(sample_count));
+        reply(result);
         return;
     }
 

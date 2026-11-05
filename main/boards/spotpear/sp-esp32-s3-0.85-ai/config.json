@@ -8,8 +8,14 @@
             "sdkconfig_append": [
                 "CONFIG_LV_USE_ANIMIMG=y",
                 "CONFIG_KITTY_PET_MODE=y",
-                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y"
-            ]
+                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y",
+                "CONFIG_USE_CUSTOM_WAKE_WORD=y",
+                "CONFIG_SR_MN_CN_MULTINET7_QUANT=y",
+                "CONFIG_CUSTOM_WAKE_WORD=\"xiao mi\"",
+                "CONFIG_CUSTOM_WAKE_WORD_DISPLAY=\"小咪\"",
+                "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=20"
+            ],
+            "wake_word": "custom"
         }
     ]
 }

@@ -1,6 +1,10 @@
 #ifndef KITTY_AGENT_LINK_H_
 #define KITTY_AGENT_LINK_H_
 
+#include <deque>
+#include <mutex>
+#include <string>
+
 #include <cJSON.h>
 
 #include "pet/pet.h"
@@ -44,6 +48,10 @@ private:
     AgentLink() = default;
 
     void HandleLine(char* line);
+    // The port is drained by its own task; complete lines wait here for the body
+    // loop, so every handler still runs on one thread.
+    static void ReaderEntry(void* arg);
+    void ReadLoop();
     void Dispatch(char* line);
     void SendEvent(const char* method, cJSON* params);
     void SendDocument(cJSON* document);
@@ -58,8 +66,14 @@ private:
     float since_rx_ = 0.0f;    // seconds since the last line from the host
     float face_hold_ = 0.0f;   // seconds the host's face stays on screen
 
-    char rx_[512] = {};
+    // Big enough for one pet.say line (base64 PCM); allocated in PSRAM.
+    char* rx_ = nullptr;
+    size_t rx_capacity_ = 0;
     size_t rx_len_ = 0;
+
+    std::mutex lines_mutex_;
+    std::deque<std::string> lines_;
+    void* reader_ = nullptr;  // TaskHandle_t
 
     int look_dx_ = 0;
     int look_dy_ = 0;
