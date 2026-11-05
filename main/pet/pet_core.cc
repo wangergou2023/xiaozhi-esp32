@@ -135,7 +135,8 @@ void PetCore::Tick(float dt) {
     const float rate = RateScale();
     if (asleep_) {
         energy_ += kEnergyRecoverPerHour * dt / 3600.0f;
-        if (energy_ >= kWakeAt) {
+        // Night outranks a full battery: she does not wake herself at 03:00.
+        if (energy_ >= kWakeAt && !night_) {
             asleep_ = false;
             ESP_LOGI(TAG, "Woke up on her own (energy %.1f)", energy_);
         }
@@ -203,6 +204,9 @@ void PetCore::Feed(bool by_agent) {
         return;
     }
     hunger_ += gain;
+    if (by_agent && hunger_ > kAgentCareCap) {
+        hunger_ = kAgentCareCap;  // the host can keep her fed, not pampered
+    }
     affection_ += by_agent ? 0.5f : 1.0f;
     interactions_++;
     happy_left_ = 5.0f;
@@ -218,6 +222,9 @@ void PetCore::Clean(bool by_agent) {
         return;
     }
     clean_ += by_agent ? 18.0f : 35.0f;
+    if (by_agent && clean_ > kAgentCareCap) {
+        clean_ = kAgentCareCap;
+    }
     affection_ += 1.0f;
     interactions_++;
     happy_left_ = 4.0f;

@@ -1,5 +1,6 @@
 #include "pet/agent_link.h"
 
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -29,7 +30,8 @@ constexpr const char* kFirmware = "kitty-pet 0.2.0";
 const char* const kCapabilities[] = {
     "pet.face", "pet.look", "pet.attention", "pet.status", "pet.feed",
     "pet.clean", "pet.play", "pet.task", "pet.sleep", "pet.wake", "pet.night",
-    "pet.time", "pet.config", "pet.volume", "pet.say", "pet.ping",
+    "pet.time", "pet.config", "pet.volume", "pet.say", "pet.mic_stats",
+    "pet.ping",
 };
 
 // The art has no emotion faces, so a requested emotion picks the closest
@@ -365,6 +367,39 @@ void AgentLink::HandleLine(char* line) {
         PetAudio::Get().SetVolume(static_cast<int>(value->valuedouble));
         cJSON* result = cJSON_CreateObject();
         cJSON_AddNumberToObject(result, "volume", PetAudio::Get().volume());
+        reply(result);
+        return;
+    }
+
+    if (name == "pet.mic_stats") {
+        // What did the room just sound like? A tiny answer instead of a big
+        // buffer: zero crossings give the dominant tone, plus rms for level.
+        const cJSON* seconds = cJSON_GetObjectItem(params, "seconds");
+        const int length = cJSON_IsNumber(seconds) ? static_cast<int>(seconds->valuedouble) : 2;
+        std::vector<int16_t> pcm;
+        if (!Ears::Get().Latest(static_cast<size_t>(length) * 16000, pcm) || pcm.size() < 2) {
+            fail(-32603, "the microphone ring is not ready");
+            return;
+        }
+        int crossings = 0;
+        double sum = 0.0;
+        int peak = 0;
+        for (size_t i = 1; i < pcm.size(); i++) {
+            if ((pcm[i - 1] < 0) != (pcm[i] < 0)) {
+                crossings++;
+            }
+            sum += static_cast<double>(pcm[i]) * pcm[i];
+            const int magnitude = pcm[i] < 0 ? -pcm[i] : pcm[i];
+            if (magnitude > peak) {
+                peak = magnitude;
+            }
+        }
+        const double seconds_captured = static_cast<double>(pcm.size()) / 16000.0;
+        cJSON* result = cJSON_CreateObject();
+        cJSON_AddNumberToObject(result, "hz", crossings / 2.0 / seconds_captured);
+        cJSON_AddNumberToObject(result, "rms", sqrt(sum / pcm.size()));
+        cJSON_AddNumberToObject(result, "peak", peak);
+        cJSON_AddNumberToObject(result, "samples", static_cast<double>(pcm.size()));
         reply(result);
         return;
     }

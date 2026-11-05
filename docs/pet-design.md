@@ -630,3 +630,54 @@ I (8502) PetEars: Heard her name:  ni hao xiao mi (prob 0.07)
    于是 `pet_link` 任务把 IDLE1 饿死 → 看门狗复位。改成 `vTaskDelay(1)`。
 
 两个 bug 都是"看起来正常的代码在特定配置下不成立"，值得记在文档里。
+
+### 用 agent 真机驱动（petctl）
+
+之前验证协议用的都是 `scripts/pet_agent.py`：一个把每条原语按顺序打一遍的脚本。
+那是"脚本假扮 agent"，不是 agent 在决策。补了一个 `scripts/petctl.py`：
+
+```
+python scripts/petctl.py status
+python scripts/petctl.py clean
+python scripts/petctl.py task result=done
+python scripts/petctl.py say --wav hello.wav
+```
+
+一次调用一条 JSON-RPC，开串口**之前**就把 DTR/RTS 置低（否则开串口会复位板子），
+所以任意 agent 框架、任意 shell 都能用。大块数据要分片写（128 字节 / 4 ms），
+否则 1 KB 的接收环会溢出、整行丢失。
+
+用这个桥实际跑了一轮，agent 侧按状态做决定：
+
+| 命令 | 结果 |
+| --- | --- |
+| `status` | `clean 69`，其余满值 |
+| `clean` | 69 → 87，`mood` 变 happy |
+| `task result=done` | energy 100 → 95、affection +2 |
+| `task result=error` | energy 95 → 87、affection −1 |
+| `face emotion=happy` | ok |
+| `say --wav` | 28 片推流，她真的说出来了 |
+| `night on` | 之后 `face` 返回 −32001，`status` 仍可读 |
+| `wake` | 回到白天 |
+
+这一轮抓出两个**只有真机驱动才会暴露**的偏差，都已修：
+
+1. **夜间没真睡着。** `ForceSleep()` 之后 `Tick()` 看到精力 ≥ 唤醒阈值（85）当场又把她
+   叫醒，`status` 里 `sleeping` 一直是 false。现在夜间不自动醒（`if (energy_ >= kWakeAt && !night_)`）。
+2. **代劳上限是"进门检查"不是"封顶"。** 文档写"补到 85 就补不动"，实际是从 69 一次补到
+   87 —— 因为判断在加之前、且只比较起始值。现在补完再钳到 85。
+
+### 她说话到底清不清楚
+
+用户听到她说话像 "huan cai hao han geng"。用她的麦克风量了一下自己的喇叭：
+
+```
+放 1 kHz 正弦 → 麦克风测回 999.5 Hz（rms 2564，峰值 5845）
+```
+
+**采样率是准的**，通路没有变速变调。真正的原因是音源：Windows 自带的
+Microsoft Huihui 是拼接式老语音，经 0.85 寸小喇叭糊成一片；换成 edge-tts 的神经语音，
+同一个通路放出来用户当场听清了"你好小咪"。
+
+顺带一个自证：让她自己说"你好小咪"时，她自己的麦克风把这句话认了出来
+（`calls` 计数 +1）—— 声学回路和命令模型同时在正常工作。
