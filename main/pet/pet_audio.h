@@ -55,6 +55,7 @@ private:
     void Fill(int16_t* out, int samples);
     float VoiceSample();
     float NextNoise();
+    float purr_sample();
 
     struct VoiceState {
         Voice kind = Voice::kNone;
@@ -78,8 +79,8 @@ private:
     bool started_ = false;
 
     uint32_t rng_ = 0x9E3779B9u;
-    float low_pass_ = 0.0f;
     float breath_phase_ = 0.0f;
+    size_t purr_position_ = 0;
 };
 
 }  // namespace kitty

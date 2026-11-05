@@ -13,6 +13,13 @@
 #include "board.h"
 #include "settings.h"
 
+// The night bed is a real purr (public domain, Wikimedia Commons
+// File:Purring_cat.oga by Mysid), cut on whole purr cycles by make_purr.py.
+extern "C" {
+extern const uint8_t purr_pcm[] asm("_binary_purr_pcm_start");
+extern const uint8_t purr_pcm_end[] asm("_binary_purr_pcm_end");
+}
+
 namespace kitty {
 namespace {
 
@@ -122,6 +129,17 @@ void PetAudio::Run() {
     }
 }
 
+float PetAudio::purr_sample() {
+    const size_t count = (purr_pcm_end - purr_pcm) / sizeof(int16_t);
+    if (count == 0) {
+        return 0.0f;
+    }
+    const auto* samples = reinterpret_cast<const int16_t*>(purr_pcm);
+    const float value = static_cast<float>(samples[purr_position_]) / 32768.0f;
+    purr_position_ = (purr_position_ + 1) % count;
+    return value;
+}
+
 float PetAudio::NextNoise() {
     // xorshift32: cheap, good enough for hiss and clicks.
     rng_ ^= rng_ << 13;
@@ -195,14 +213,13 @@ void PetAudio::Fill(int16_t* out, int samples) {
         float mixed = 0.0f;
 
         if (night_ && night_noise_) {
-            // Night bed: filtered hiss that swells and fades five times a minute.
+            // Night bed: her own purr, swelling and fading with slow breathing.
             breath_phase_ += 1.0f / static_cast<float>(sample_rate_);
             if (breath_phase_ >= kBreathPeriod) {
                 breath_phase_ -= kBreathPeriod;
             }
-            const float swell = 0.5f + 0.5f * sinf(kTwoPi * breath_phase_ / kBreathPeriod - kPi * 0.5f);
-            low_pass_ += 0.04f * (NextNoise() - low_pass_);
-            mixed += low_pass_ * (0.10f + 0.55f * swell);
+            const float swell = 0.55f + 0.45f * (0.5f + 0.5f * sinf(kTwoPi * breath_phase_ / kBreathPeriod - kPi * 0.5f));
+            mixed += purr_sample() * 0.42f * swell;
         }
 
         // Host-pushed PCM plays on top of everything else.
@@ -260,8 +277,8 @@ void PetAudio::SetNight(bool on) {
     }
     night_ = on;
     if (!on) {
-        // Leaving the bed: stop the hiss instead of letting it fade out.
-        low_pass_ = 0.0f;
+        // Start the purr from its beginning next time.
+        purr_position_ = 0;
     }
 }
 

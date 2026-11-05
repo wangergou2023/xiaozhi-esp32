@@ -1219,6 +1219,7 @@ set(BOARD_EMBED_FILES "")
 if(CONFIG_KITTY_PET_MODE)
     list(APPEND BOARD_EMBED_FILES
         "pet/assets/pet_frames.bin"
+        "pet/assets/purr.pcm"
     )
 endif()
 idf_component_register(SRCS ${SOURCES}
