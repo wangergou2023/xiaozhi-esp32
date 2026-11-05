@@ -60,6 +60,7 @@ struct Status {
     Mood mood = Mood::kContent;
     bool sleeping = false;
     bool night = false;
+    int calls = 0;  // how many times she heard her name, saved across boots
 };
 
 const char* ToName(Mood mood);

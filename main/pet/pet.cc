@@ -6,6 +6,7 @@
 
 #include <driver/usb_serial_jtag.h>
 #include <esp_log.h>
+#include <esp_heap_caps.h>
 #include <esp_timer.h>
 
 #include "board.h"
@@ -222,6 +223,10 @@ void Run() {
     Ears::Get().Start();
     AgentLink::Get().Start(&g_action);
 
+    ESP_LOGI(TAG, "Free memory: internal %u KB, PSRAM %u KB",
+             static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+
     auto& core = PetCore::Get();
     core.Load();
     Greet();
@@ -256,6 +261,7 @@ void Run() {
             case Ears::Event::kCalled: {
                 // She heard her name: look up, chirp, tell the host.
                 core.Poke();
+                core.NoteCalled();
                 PetAudio::Get().Play(Voice::kHappy);
                 ReactionLook(Clip::kWave, 110, 1.6f, core.status());
                 g_action.SetLook(0, -3);

@@ -2,6 +2,7 @@
 #define KITTY_PET_EARS_H_
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 
 #include <esp_mn_iface.h>
@@ -34,6 +35,15 @@ public:
 
     Event TakeEvent();
 
+    // Feed a block of 16 kHz mono PCM straight into the command model instead of
+    // the microphone. Used for self-tests: it separates "the model did not
+    // recognise it" from "the room did not deliver it".
+    std::string Recognize(const int16_t* samples, size_t count);
+
+    // Swap the command phrase at runtime (does not touch NVS). Used while
+    // tuning, so a phrase can be tried without a rebuild.
+    bool UsePhrase(const std::string& phrase);
+
     // The command phrase in pinyin, e.g. "xiao mi". Stored in NVS.
     std::string phrase();
     void SetPhrase(const std::string& phrase);
@@ -46,11 +56,14 @@ private:
 
     void* codec_ = nullptr;
     void* task_ = nullptr;
+    void* models_ = nullptr;  // srmodel_list_t*, loaded once
     const esp_mn_iface_t* model_ = nullptr;
     model_iface_data_t* model_data_ = nullptr;
     int chunk_samples_ = 512;
     std::string phrase_;
 
+    std::mutex model_mutex_;  // the task and Recognize must not detect at once
+    bool commands_ready_ = false;
     volatile bool running_ = false;
     volatile int event_ = 0;
 };

@@ -40,6 +40,9 @@ public:
     void Play(bool by_agent = false);         // 陪玩
     void AgentTaskDone();   // agent 完成一次任务
     void AgentTaskFailed(); // agent 报错 / 被打断
+    // She heard her name. Counted in NVS so a test does not depend on being
+    // plugged in at the right moment.
+    void NoteCalled();
     void ForceSleep();
     void ForceWake();
 
@@ -104,6 +107,7 @@ private:
     bool has_clock_ = false;
     int64_t epoch_base_ = 0;
     int64_t epoch_us_ = 0;
+    int calls_ = 0;
     int personality_ = 1;
     int tz_offset_minute_ = 8 * 60;  // UTC+8 until a host says otherwise
     int sleep_start_minute_ = 23 * 60;

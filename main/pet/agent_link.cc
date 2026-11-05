@@ -15,6 +15,7 @@
 #include "pet/pet_action.h"
 #include "pet/pet_audio.h"
 #include "pet/pet_core.h"
+#include "pet/pet_ears.h"
 #include "pet/pet_gateway.h"
 
 namespace kitty {
@@ -89,6 +90,7 @@ cJSON* StatusJson(const Status& status) {
     cJSON_AddStringToObject(json, "mode", ToName(status.mode));
     cJSON_AddBoolToObject(json, "sleeping", status.sleeping);
     cJSON_AddBoolToObject(json, "night", status.night);
+    cJSON_AddNumberToObject(json, "calls", status.calls);
     return json;
 }
 
@@ -466,13 +468,66 @@ void AgentLink::HandleLine(char* line) {
             fail(-32602, "pcm is not valid base64");
             return;
         }
-        std::vector<int16_t> samples(decoded_len / 2);
-        memcpy(samples.data(), raw.data(), samples.size() * sizeof(int16_t));
-        const size_t sample_count = samples.size();
-        PetAudio::Get().PlayPcm(std::move(samples));
+        const size_t count = decoded_len / 2;
+        const cJSON* first = cJSON_GetObjectItem(params, "first");
+        const cJSON* last = cJSON_GetObjectItem(params, "last");
+        if (say_buffer_ == nullptr) {
+            // PSRAM is tight on this board (LVGL pool, image cache, frames and
+            // the command model), so take what is still there.
+            const size_t sizes[] = {4 * 16000, 2 * 16000, 16000};
+            for (size_t samples : sizes) {
+                say_buffer_ = static_cast<int16_t*>(
+                    heap_caps_malloc(samples * sizeof(int16_t), MALLOC_CAP_SPIRAM));
+                if (say_buffer_ != nullptr) {
+                    say_capacity_ = samples;
+                    break;
+                }
+            }
+            if (say_buffer_ == nullptr) {
+                fail(-32603, "no memory for speech");
+                return;
+            }
+            ESP_LOGI(TAG, "Speech buffer: %u samples", static_cast<unsigned>(say_capacity_));
+        }
+        if (cJSON_IsBool(first) && cJSON_IsTrue(first)) {
+            say_length_ = 0;
+        }
+        if (say_length_ + count > say_capacity_) {
+            say_length_ = 0;
+            fail(-32602, "speech longer than the buffer");
+            return;
+        }
+        memcpy(say_buffer_ + say_length_, raw.data(), count * sizeof(int16_t));
+        say_length_ += count;
+
+        const bool finish = !cJSON_IsBool(last) || cJSON_IsTrue(last);
+        size_t played = 0;
+        const cJSON* test = cJSON_GetObjectItem(params, "test");
+        if (finish && cJSON_IsBool(test) && cJSON_IsTrue(test)) {
+            const cJSON* phrase = cJSON_GetObjectItem(params, "phrase");
+            if (cJSON_IsString(phrase)) {
+                Ears::Get().UsePhrase(phrase->valuestring);
+            }
+            // Feed it to the command model instead of the speaker.
+            const std::string heard = Ears::Get().Recognize(say_buffer_, say_length_);
+            cJSON* result = cJSON_CreateObject();
+            cJSON_AddBoolToObject(result, "ok", true);
+            cJSON_AddStringToObject(result, "heard", heard.c_str());
+            cJSON_AddNumberToObject(result, "samples", static_cast<double>(say_length_));
+            say_length_ = 0;
+            reply(result);
+            return;
+        }
+        if (finish) {
+            std::vector<int16_t> samples(say_buffer_, say_buffer_ + say_length_);
+            played = samples.size();
+            PetAudio::Get().PlayPcm(std::move(samples));
+            say_length_ = 0;
+        }
         cJSON* result = cJSON_CreateObject();
         cJSON_AddBoolToObject(result, "ok", true);
-        cJSON_AddNumberToObject(result, "samples", static_cast<double>(sample_count));
+        cJSON_AddNumberToObject(result, "chunk", static_cast<double>(count));
+        cJSON_AddNumberToObject(result, "played", static_cast<double>(played));
         reply(result);
         return;
     }

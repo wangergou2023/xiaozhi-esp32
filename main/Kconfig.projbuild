@@ -1,5 +1,22 @@
 menu "Xiaozhi Assistant"
 
+config LV_PSRAM_POOL_EXTRA_KB
+    int "Extra LVGL pool in PSRAM (KB)"
+    depends on SPIRAM
+    default 2560
+    help
+        Extra TLSF pool added on top of LV_MEM_SIZE when PSRAM is 8 MB or more.
+        Boards that also hold big assets (animation frames, speech models) can
+        lower this and the image cache below to leave PSRAM free.
+
+config LV_IMAGE_CACHE_KB
+    int "LVGL decoded image cache (KB)"
+    depends on SPIRAM
+    default 2048
+    help
+        Size of the LVGL decoded-image cache. Only decoded images (PNG) use it,
+        so a board that draws raw RGB565 frames needs far less.
+
 config KITTY_PET_MODE
     bool "Kitty pet mode: standalone desktop pet, no network and no cloud"
     default y if BOARD_TYPE_SPOTPEAR_ESP32S3_LCD085

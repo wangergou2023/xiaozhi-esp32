@@ -71,6 +71,14 @@ private:
     size_t rx_capacity_ = 0;
     size_t rx_len_ = 0;
 
+    // pet.say is streamed in chunks; they are collected here and handed to the
+    // audio path in one piece when the host marks the last one. Playing each
+    // chunk as it arrives stutters, and stuttered speech is useless to both the
+    // speaker and her ears.
+    int16_t* say_buffer_ = nullptr;
+    size_t say_capacity_ = 0;
+    size_t say_length_ = 0;
+
     std::mutex lines_mutex_;
     std::deque<std::string> lines_;
     void* reader_ = nullptr;  // TaskHandle_t

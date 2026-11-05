@@ -39,11 +39,14 @@ public:
     void PlayPcm(std::vector<int16_t>&& samples);
 
     // Night mode swaps the voice for an algorithmic bed: slow breathing hiss.
+    // `noise` can be turned off so the night is silent except for her breathing.
     void SetNight(bool on);
+    void SetNightNoise(bool noise);
 
     // 0-100, also written to NVS so it survives a reboot.
     void SetVolume(int volume);
     int volume() const { return volume_; }
+    bool night_noise() const { return night_noise_; }
 
 private:
     PetAudio() = default;
@@ -71,6 +74,7 @@ private:
     int volume_ = 60;
 
     volatile bool night_ = false;
+    volatile bool night_noise_ = true;
     bool started_ = false;
 
     uint32_t rng_ = 0x9E3779B9u;

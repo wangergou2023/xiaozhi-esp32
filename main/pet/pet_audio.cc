@@ -76,6 +76,10 @@ void PetAudio::Start() {
     }
     Settings settings("audio", false);
     volume_ = settings.GetInt("output_volume", 60);
+    {
+        Settings pet("pet", false);
+        night_noise_ = pet.GetBool("night_noise", true);
+    }
     if (volume_ > 0) {
         codec->SetOutputVolume(volume_);
     } else {
@@ -190,7 +194,7 @@ void PetAudio::Fill(int16_t* out, int samples) {
     for (int i = 0; i < samples; i++) {
         float mixed = 0.0f;
 
-        if (night_) {
+        if (night_ && night_noise_) {
             // Night bed: filtered hiss that swells and fades five times a minute.
             breath_phase_ += 1.0f / static_cast<float>(sample_rate_);
             if (breath_phase_ >= kBreathPeriod) {
@@ -242,6 +246,12 @@ void PetAudio::PlayPcm(std::vector<int16_t>&& samples) {
         pcm_queue_.pop_front();
     }
     pcm_queue_.push_back(std::move(samples));
+}
+
+void PetAudio::SetNightNoise(bool noise) {
+    night_noise_ = noise;
+    Settings settings("pet", true);
+    settings.SetBool("night_noise", noise);
 }
 
 void PetAudio::SetNight(bool on) {

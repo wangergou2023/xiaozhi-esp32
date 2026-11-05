@@ -34,7 +34,7 @@ constexpr float kSaveInterval = 60.0f;
 // Energy thresholds. Below kSleepAt she drops off by herself, below kWakeAt she
 // cannot be woken by a poke (docs: "精力见底会强制睡着，叫不醒").
 constexpr float kSleepAt = 3.0f;
-constexpr float kWakeAt = 96.0f;
+constexpr float kWakeAt = 85.0f;
 constexpr float kCannotWakeBelow = 30.0f;
 
 // Storage: the numbers keep one decimal, so they are stored as fixed point.
@@ -64,6 +64,7 @@ void PetCore::Load() {
     name_ = settings.GetString("name", "Kitty");
     asleep_ = settings.GetBool("asleep", false);
     tz_offset_minute_ = settings.GetInt("tz_offset", 8 * 60);
+    calls_ = settings.GetInt("calls", 0);
     personality_ = settings.GetInt("personality", 1);
     sleep_start_minute_ = settings.GetInt("sleep_start", 23 * 60);
     sleep_end_minute_ = settings.GetInt("sleep_end", 7 * 60);
@@ -89,6 +90,7 @@ void PetCore::Save() {
     settings.SetString("name", name_);
     settings.SetBool("asleep", asleep_);
     settings.SetInt("tz_offset", tz_offset_minute_);
+    settings.SetInt("calls", calls_);
     settings.SetInt("personality", personality_);
     settings.SetInt("sleep_start", sleep_start_minute_);
     settings.SetInt("sleep_end", sleep_end_minute_);
@@ -260,6 +262,13 @@ void PetCore::AgentTaskFailed() {
     ClampAll();
     Refresh();
     ESP_LOGI(TAG, "Agent failed: energy %.0f affection %.0f", energy_, affection_);
+}
+
+void PetCore::NoteCalled() {
+    calls_++;
+    Save();
+    Refresh();
+    ESP_LOGI(TAG, "Called by name %d time(s)", calls_);
 }
 
 void PetCore::ForceSleep() {
@@ -447,6 +456,7 @@ void PetCore::Refresh() {
     status_.mood = mood;
     status_.sleeping = asleep_;
     status_.night = night_;
+    status_.calls = calls_;
 }
 
 void PetCore::ClampAll() {
