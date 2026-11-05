@@ -404,3 +404,41 @@ WiFi 在本设计中**只是配网射频**，不是联网能力。
 
 `pet.say` 返回 -32601，未知方法同样；`pet.sleep`/`pet.wake` 让 `mood` 在
 `asleep` / `content` 之间切换，都被 `pet.state_changed` 报出来了。
+
+### V2 · 有脾气 + 会睡觉（大部分已实现）
+
+| 项 | 实现 |
+| --- | --- |
+| 行为调度 | `behavior.cc` 权重表：困了多打哈欠、亲密度高才爱主动凑近、夜里安静 |
+| 音效 | `pet_audio.cc` 现场合成：叫声、两声雀跃、哈欠、咕噜、咀嚼、叹气。**没有音频文件** |
+| 音频通路 | 只用板卡的 ES8311 输出，不起 `AudioService`：没有麦克风、没有 AEC、没有唤醒词 |
+| 呼吸节律 | 夜间每 12 秒一次的低频沙沙，幅度随呼吸起伏 |
+| 白噪音 | 低通滤波噪声，和呼吸节律同一条通路，零 Flash |
+| 时钟 | `pet.time {epoch, tz_offset}` 由 host 推过来；没有 RTC 也没有 NTP |
+| 作息 | `sleep_start` / `sleep_end`（默认 23:00–07:00，跨午夜），5 秒轮询一次 |
+| 夜间模式 | 屏幕 4%、灯全灭、脸部定格睡姿、行为调度停摆、音频换成呼吸床 |
+| 夜间保护 | agent 的 `pet.face` `pet.look` `pet.attention` `pet.feed` `pet.play` `pet.clean` `pet.task` `pet.say` 全部返回 -32001；只留 `pet.wake` `pet.status` `pet.ping` `pet.night` |
+| 退出 | 作息结束自动醒、agent `pet.wake`、或者按一下 BOOT |
+
+与设计的偏差：
+
+1. **唤醒词没做。** esp-sr 的唤醒词是训练出来的模型，仓库里只有「你好小智」那一个；
+   要做「叫 Kitty」得单独训练并塞进固件。这一版先不假装有。
+2. **时间必须由 host 推。** 拔了电脑就没有时钟，作息时段自动失效 —— 这正是 §13
+   未决项 3 说的状态，现在是"没有时间就只认手动"的降级实现。
+3. **夜间是"睡死"而不是"浅睡"**：`energy` 会回，但 `hunger` 照样掉，第二天醒来可能饿。
+4. **白噪音不可关。** §11 说"可选"；现在进了夜间就有，没有单独的开关。
+
+硬件验证（2026-11-05，实测）：
+
+```
+I (321) Es8311AudioCodec: Es8311AudioCodec initialized
+I (341) PetAudio: Voice ready: 16000 Hz, volume 85
+I (760) PetCore: Clock set to 23:20            # 由 pet.time 推入
+I (5460) PetCore: Night mode on                # 5 秒轮询撞上作息窗口
+I (5460) Pet: Night mode on (schedule)
+I (60420) Pet: alive 60s | asleep | h 97 e 52 ...   # 夜间连跑 60 秒，精力 +1
+```
+
+`pet.face` 在夜间返回 -32001；`pet.wake` 把 `night` 关掉并播一声雀跃。
+喇叭里到底好不好听得人来听 —— 我只能确认它没崩、音频通路是通的。

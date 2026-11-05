@@ -21,7 +21,8 @@ constexpr const char* kFirmware = "kitty-pet 0.2.0";
 
 const char* const kCapabilities[] = {
     "pet.face", "pet.look", "pet.attention", "pet.status", "pet.feed",
-    "pet.clean", "pet.play", "pet.task", "pet.sleep", "pet.wake", "pet.ping",
+    "pet.clean", "pet.play", "pet.task", "pet.sleep", "pet.wake", "pet.night",
+    "pet.time", "pet.ping",
 };
 
 // The art has no emotion faces, so a requested emotion picks the closest
@@ -81,6 +82,7 @@ cJSON* StatusJson(const Status& status) {
     cJSON_AddStringToObject(json, "stage", ToName(status.stage));
     cJSON_AddStringToObject(json, "mode", ToName(status.mode));
     cJSON_AddBoolToObject(json, "sleeping", status.sleeping);
+    cJSON_AddBoolToObject(json, "night", status.night);
     return json;
 }
 
@@ -233,6 +235,45 @@ void AgentLink::HandleLine(char* line) {
         return;
     }
 
+    // At night she only takes part in the bare minimum: see her status, wake her,
+    // end the night. Everything else is refused (docs/pet-design.md §10).
+    if (core.night() &&
+        (name == "pet.face" || name == "pet.look" || name == "pet.attention" ||
+         name == "pet.say" || name == "pet.feed" || name == "pet.play" ||
+         name == "pet.clean" || name == "pet.task")) {
+        fail(-32001, "she is asleep; only pet.wake, pet.status, pet.ping and pet.night answer at night");
+        return;
+    }
+
+    if (name == "pet.night") {
+        const cJSON* on = cJSON_GetObjectItem(params, "on");
+        const bool night = cJSON_IsBool(on) ? cJSON_IsTrue(on) : true;
+        core.SetNight(night);
+        reply(StatusJson(core.status()));
+        return;
+    }
+
+    if (name == "pet.time") {
+        const cJSON* epoch = cJSON_GetObjectItem(params, "epoch");
+        if (!cJSON_IsNumber(epoch)) {
+            fail(-32602, "epoch (seconds since 1970) is required");
+            return;
+        }
+        const cJSON* tz = cJSON_GetObjectItem(params, "tz_offset");
+        if (cJSON_IsNumber(tz)) {
+            core.SetTimezone(static_cast<int>(tz->valuedouble));
+        }
+        core.SetEpoch(static_cast<int64_t>(epoch->valuedouble));
+        cJSON* result = cJSON_CreateObject();
+        cJSON_AddBoolToObject(result, "ok", true);
+        cJSON_AddNumberToObject(result, "minute_of_day", core.MinuteOfDay());
+        cJSON_AddNumberToObject(result, "sleep_start_minute", core.sleep_start_minute());
+        cJSON_AddNumberToObject(result, "sleep_end_minute", core.sleep_end_minute());
+        cJSON_AddNumberToObject(result, "tz_offset", core.timezone());
+        reply(result);
+        return;
+    }
+
     if (name == "pet.face") {
         const cJSON* emotion = cJSON_GetObjectItem(params, "emotion");
         const cJSON* intensity = cJSON_GetObjectItem(params, "intensity");
@@ -295,6 +336,8 @@ void AgentLink::HandleLine(char* line) {
         return;
     }
     if (name == "pet.wake") {
+        // Waking her up also ends the night: the two are the same thing here.
+        core.SetNight(false);
         core.ForceWake();
         ok();
         return;

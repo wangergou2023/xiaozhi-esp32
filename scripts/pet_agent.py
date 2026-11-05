@@ -109,6 +109,18 @@ def main() -> None:
     time.sleep(0.2)
     kitty.pump(0.5)
 
+    print("== night mode: a clock, then the bed ==")
+    kitty.call("pet.time", epoch=int(time.time()), tz_offset=480)
+    time.sleep(0.3)
+    kitty.call("pet.night", on=True)
+    time.sleep(0.4)
+    print("   (she should now refuse the face command)")
+    kitty.call("pet.face", emotion="angry")
+    time.sleep(0.3)
+    kitty.call("pet.wake")
+    time.sleep(0.4)
+    kitty.pump(0.8)
+
     print("== heartbeat: six pings keep her ==")
     for _ in range(6):
         kitty.call("pet.ping")

@@ -59,6 +59,7 @@ struct Status {
     Stage stage = Stage::kBaby;
     Mood mood = Mood::kContent;
     bool sleeping = false;
+    bool night = false;
 };
 
 const char* ToName(Mood mood);

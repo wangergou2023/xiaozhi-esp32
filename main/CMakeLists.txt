@@ -52,6 +52,7 @@ if(CONFIG_KITTY_PET_MODE)
         "pet/pet.cc"
         "pet/agent_link.cc"
         "pet/pet_action.cc"
+        "pet/pet_audio.cc"
         "pet/pet_behavior.cc"
         "pet/pet_core.cc"
         "pet/pet_expression.cc"

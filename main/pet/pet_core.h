@@ -40,12 +40,29 @@ public:
     void ForceSleep();
     void ForceWake();
 
+    // Time. The board has no RTC and no network, so the clock only exists once
+    // a host hands it over (docs/pet-design.md §13 item 3). Until then every
+    // schedule is disabled and the night can only be entered by hand.
+    void SetEpoch(int64_t epoch_seconds);
+    void SetTimezone(int minutes_from_utc);
+    int timezone() const { return tz_offset_minute_; }
+    bool HasClock() const { return has_clock_; }
+    int MinuteOfDay() const;  // -1 without a clock
+    bool InSleepWindow() const;
+
+    // Night mode is a body state, not a mood: it outranks everything else.
+    bool night() const { return night_; }
+    void SetNight(bool on);
+
     // Configuration (docs/pet-design.md §11). Kept here so there is one owner
     // of the save file; the HTTP configuration page is only a front end.
     int difficulty();  // 0 easy, 1 normal, 2 hard
     void SetDifficulty(int difficulty);
     std::string name();
     void SetName(const std::string& name);
+    int sleep_start_minute();
+    int sleep_end_minute();
+    void SetSleepWindow(int start_minute, int end_minute);
 
     // True when the mood or the stage changed since the last call. Used to tell
     // the agent about a change once instead of on every tick.
@@ -78,6 +95,14 @@ private:
     float save_left_ = 60.0f;
     bool loaded_ = false;
     bool changed_ = true;
+
+    bool has_clock_ = false;
+    int64_t epoch_base_ = 0;
+    int64_t epoch_us_ = 0;
+    int tz_offset_minute_ = 8 * 60;  // UTC+8 until a host says otherwise
+    int sleep_start_minute_ = 23 * 60;
+    int sleep_end_minute_ = 7 * 60;
+    bool night_ = false;
 
     Status status_{};
 };

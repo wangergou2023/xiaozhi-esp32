@@ -13,6 +13,7 @@
 #include "pet/lamp.h"
 #include "pet/agent_link.h"
 #include "pet/pet_action.h"
+#include "pet/pet_audio.h"
 #include "pet/pet_behavior.h"
 #include "pet/pet_core.h"
 #include "pet/pet_expression.h"
@@ -29,6 +30,7 @@ QueueHandle_t g_gestures = nullptr;
 
 Action g_action;
 Behavior g_behavior;
+bool g_night = false;
 
 // A short reaction that overrides the idle look for a moment.
 struct Reaction {
@@ -63,15 +65,43 @@ Look ReactionLook(Clip clip, int frame_ms, float seconds, const Status& status) 
     return look;
 }
 
+// Night is a schedule state: she sleeps through it, keeps the screen at a
+// candle and plays the breathing bed instead of her voice (docs §10).
+void ApplyNight(bool on, const char* why) {
+    if (on == g_night) {
+        return;
+    }
+    g_night = on;
+    auto& core = PetCore::Get();
+    core.SetNight(on);
+    if (on) {
+        core.ForceSleep();
+        PetAudio::Get().SetNight(true);
+        ESP_LOGI(TAG, "Night mode on (%s)", why);
+    } else {
+        core.ForceWake();
+        PetAudio::Get().SetNight(false);
+        PetAudio::Get().Play(Voice::kHappy);
+        ESP_LOGI(TAG, "Night mode off (%s)", why);
+    }
+}
+
 void HandleGesture(Gesture gesture) {
     auto& core = PetCore::Get();
     const Status& status = core.status();
     // The host hears about every gesture, whether or not it owns the face.
     AgentLink::Get().OnGesture(gesture, status);
 
+    // A touch in the middle of the night is how you wake her up.
+    if (g_night) {
+        ApplyNight(false, "touched");
+        return;
+    }
+
     switch (gesture) {
         case Gesture::kBootClick:
             core.Poke();
+            PetAudio::Get().Play(Voice::kMeow);
             ESP_LOGI(TAG, "Petted");
             if (!core.status().sleeping) {
                 ReactionLook(Clip::kWave, 110, 1.2f, status);
@@ -79,6 +109,7 @@ void HandleGesture(Gesture gesture) {
             break;
         case Gesture::kBootDoubleClick:
             core.Feed();
+            PetAudio::Get().Play(Voice::kChew);
             ESP_LOGI(TAG, "Fed");
             if (!core.status().sleeping) {
                 ReactionLook(Clip::kJump, 95, 1.4f, status);
@@ -88,6 +119,7 @@ void HandleGesture(Gesture gesture) {
             // The SoftAP configuration page is V3 in the design; until then the
             // gesture is acknowledged with a look so it does not feel dead.
             ESP_LOGW(TAG, "Configuration mode is not implemented yet");
+            PetAudio::Get().Play(Voice::kSigh);
             ReactionLook(Clip::kReview, 200, 2.0f, status);
             break;
         case Gesture::kPowerClick: {
@@ -165,6 +197,7 @@ void Run() {
         display->SetupUI();
     }
     g_action.Attach(display, g_lamp, board.GetBacklight());
+    PetAudio::Get().Start();
     AgentLink::Get().Start(&g_action);
 
     auto& core = PetCore::Get();
@@ -197,9 +230,19 @@ void Run() {
             core.SetMode(UsbHostAttached() ? Mode::kDocked : Mode::kAutonomous);
         }
 
+        // The host may also send her to bed.
+        if (core.night() != g_night) {
+            ApplyNight(core.night(), "host");
+        }
+
         usb_poll_left -= dt;
         if (usb_poll_left <= 0.0f) {
             usb_poll_left = kUsbPollSeconds;
+            // With a clock the schedule runs itself; without one the night only
+            // starts when somebody asks for it.
+            if (core.HasClock() && core.InSleepWindow() != g_night) {
+                ApplyNight(core.InSleepWindow(), "schedule");
+            }
             const bool attached = UsbHostAttached();
             if (attached && core.status().mode == Mode::kAutonomous) {
                 core.SetMode(Mode::kDocked);

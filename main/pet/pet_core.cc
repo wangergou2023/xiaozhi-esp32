@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include <esp_log.h>
+#include <esp_timer.h>
 
 #include "settings.h"
 
@@ -58,6 +59,9 @@ void PetCore::Load() {
     difficulty_ = settings.GetInt("difficulty", 1);
     name_ = settings.GetString("name", "Kitty");
     asleep_ = settings.GetBool("asleep", false);
+    tz_offset_minute_ = settings.GetInt("tz_offset", 8 * 60);
+    sleep_start_minute_ = settings.GetInt("sleep_start", 23 * 60);
+    sleep_end_minute_ = settings.GetInt("sleep_end", 7 * 60);
     ClampAll();
     loaded_ = true;
     Refresh();
@@ -79,6 +83,9 @@ void PetCore::Save() {
     settings.SetInt("difficulty", difficulty_);
     settings.SetString("name", name_);
     settings.SetBool("asleep", asleep_);
+    settings.SetInt("tz_offset", tz_offset_minute_);
+    settings.SetInt("sleep_start", sleep_start_minute_);
+    settings.SetInt("sleep_end", sleep_end_minute_);
     save_left_ = kSaveInterval;
 }
 
@@ -273,6 +280,75 @@ void PetCore::SetName(const std::string& name) {
     Save();
 }
 
+void PetCore::SetEpoch(int64_t epoch_seconds) {
+    epoch_base_ = epoch_seconds;
+    epoch_us_ = esp_timer_get_time();
+    has_clock_ = true;
+    const int minute = MinuteOfDay();
+    ESP_LOGI(TAG, "Clock set to %02d:%02d", (minute / 60) % 24, minute % 60);
+}
+
+void PetCore::SetTimezone(int minutes_from_utc) {
+    tz_offset_minute_ = std::clamp(minutes_from_utc, -14 * 60, 14 * 60);
+    Save();
+    ESP_LOGI(TAG, "Time zone UTC%+d:%02d", tz_offset_minute_ / 60,
+             std::abs(tz_offset_minute_ % 60));
+}
+
+int PetCore::MinuteOfDay() const {
+    if (!has_clock_) {
+        return -1;
+    }
+    const int64_t elapsed = (esp_timer_get_time() - epoch_us_) / 1000000;
+    const int64_t seconds = epoch_base_ + elapsed + tz_offset_minute_ * 60;
+    int64_t minute_of_day = (seconds % 86400 + 86400) % 86400 / 60;
+    return static_cast<int>(minute_of_day);
+}
+
+bool PetCore::InSleepWindow() const {
+    const int minute = MinuteOfDay();
+    if (minute < 0 || sleep_start_minute_ == sleep_end_minute_) {
+        return false;
+    }
+    if (sleep_start_minute_ < sleep_end_minute_) {
+        return minute >= sleep_start_minute_ && minute < sleep_end_minute_;
+    }
+    // A window that crosses midnight, like the default 23:00-07:00.
+    return minute >= sleep_start_minute_ || minute < sleep_end_minute_;
+}
+
+void PetCore::SetNight(bool on) {
+    if (night_ == on) {
+        return;
+    }
+    night_ = on;
+    status_.night = on;
+    changed_ = true;
+    ESP_LOGI(TAG, "Night mode %s", on ? "on" : "off");
+}
+
+int PetCore::sleep_start_minute() {
+    if (!loaded_) {
+        Load();
+    }
+    return sleep_start_minute_;
+}
+
+int PetCore::sleep_end_minute() {
+    if (!loaded_) {
+        Load();
+    }
+    return sleep_end_minute_;
+}
+
+void PetCore::SetSleepWindow(int start_minute, int end_minute) {
+    sleep_start_minute_ = std::clamp(start_minute, 0, 24 * 60 - 1);
+    sleep_end_minute_ = std::clamp(end_minute, 0, 24 * 60 - 1);
+    Save();
+    ESP_LOGI(TAG, "Sleep window %02d:%02d - %02d:%02d", sleep_start_minute_ / 60,
+             sleep_start_minute_ % 60, sleep_end_minute_ / 60, sleep_end_minute_ % 60);
+}
+
 bool PetCore::TakeChanged() {
     bool changed = changed_;
     changed_ = false;
@@ -325,7 +401,8 @@ Stage PetCore::ComputeStage() const {
 void PetCore::Refresh() {
     Mood mood = ComputeMood();
     Stage stage = ComputeStage();
-    if (mood != status_.mood || stage != status_.stage || asleep_ != status_.sleeping) {
+    if (mood != status_.mood || stage != status_.stage || asleep_ != status_.sleeping ||
+        night_ != status_.night) {
         changed_ = true;
     }
     status_.hunger = static_cast<int>(std::lround(hunger_));
@@ -337,6 +414,7 @@ void PetCore::Refresh() {
     status_.stage = stage;
     status_.mood = mood;
     status_.sleeping = asleep_;
+    status_.night = night_;
 }
 
 void PetCore::ClampAll() {
