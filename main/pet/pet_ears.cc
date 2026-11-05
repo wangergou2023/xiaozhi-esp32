@@ -117,7 +117,7 @@ bool Ears::Start() {
     if (model_data_ != nullptr && !commands_ready_) {
         const esp_mn_iface_t* iface = model_;
         chunk_samples_ = iface->get_samp_chunksize(model_data_);
-        iface->set_det_threshold(model_data_, 0.15f);
+        iface->set_det_threshold(model_data_, 0.12f);
         phrase_ = phrase();
         // The command list needs a root node before anything can be added; the
         // "clear" API silently refuses to work without it.
@@ -230,7 +230,13 @@ void Ears::Run() {
 
     float heartbeat = 0.0f;
     while (running_) {
-        if (!codec->InputData(buffer)) {
+        bool have_audio = false;
+        {
+            // I2S RX has one consumer: the ear task, or a recording request.
+            std::lock_guard<std::mutex> lock(codec_mutex_);
+            have_audio = codec->InputData(buffer);
+        }
+        if (!have_audio) {
             ESP_LOGW(TAG, "No input samples");
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
@@ -267,9 +273,20 @@ void Ears::Run() {
 
         if (model_data_ != nullptr) {
             std::lock_guard<std::mutex> lock(model_mutex_);
-            constexpr int kModelGain = 3;
+            // Normalise to a comfortable level for the model. A quiet room
+            // leaves the raw signal at a few hundred counts, and the command
+            // model was trained on speech around a few thousand.
+            constexpr float kTargetRms = 3500.0f;
+            const float chunk_rms = rms > 1.0f ? rms : 1.0f;
+            float gain = kTargetRms / chunk_rms;
+            if (gain < 1.0f) {
+                gain = 1.0f;
+            } else if (gain > 8.0f) {
+                gain = 8.0f;
+            }
+            const int32_t model_gain = static_cast<int32_t>(gain * 100.0f);
             for (size_t i = 0; i < buffer.size(); i++) {
-                int32_t value = static_cast<int32_t>(buffer[i]) * kModelGain;
+                int32_t value = static_cast<int32_t>(buffer[i]) * model_gain / 100;
                 if (value > 32767) {
                     value = 32767;
                 } else if (value < -32768) {

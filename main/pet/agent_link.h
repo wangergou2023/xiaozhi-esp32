@@ -4,6 +4,7 @@
 #include <deque>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include <cJSON.h>
 

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include <esp_mn_iface.h>
 
@@ -63,6 +64,7 @@ private:
     std::string phrase_;
 
     std::mutex model_mutex_;  // the task and Recognize must not detect at once
+    std::mutex codec_mutex_;  // only one reader at a time (I2S RX is not shared)
     bool commands_ready_ = false;
     volatile bool running_ = false;
     volatile int event_ = 0;
