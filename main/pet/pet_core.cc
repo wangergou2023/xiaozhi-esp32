@@ -266,7 +266,12 @@ void PetCore::AgentTaskFailed() {
 
 void PetCore::NoteCalled() {
     calls_++;
-    Save();
+    // Writing the whole save on every detection is what filled NVS up; the
+    // counter alone is enough here and the periodic save picks it up anyway.
+    {
+        Settings settings(kNamespace, true);
+        settings.SetInt("calls", calls_);
+    }
     Refresh();
     ESP_LOGI(TAG, "Called by name %d time(s)", calls_);
 }

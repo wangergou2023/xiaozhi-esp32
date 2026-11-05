@@ -53,6 +53,10 @@ public:
     std::string phrase();
     void SetPhrase(const std::string& phrase);
 
+    // 0 low, 1 medium, 2 high. Sets the detection threshold; stored in NVS.
+    int sensitivity();
+    void SetSensitivity(int level);
+
 private:
     Ears() = default;
     static void TaskEntry(void* arg);

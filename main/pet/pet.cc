@@ -7,6 +7,7 @@
 #include <driver/usb_serial_jtag.h>
 #include <esp_log.h>
 #include <esp_heap_caps.h>
+#include <nvs.h>
 #include <esp_timer.h>
 
 #include "board.h"
@@ -223,6 +224,12 @@ void Run() {
     Ears::Get().Start();
     AgentLink::Get().Start(&g_action);
 
+    nvs_stats_t nvs_stats = {};
+    if (nvs_get_stats(nullptr, &nvs_stats) == ESP_OK) {
+        ESP_LOGI(TAG, "NVS: %u used, %u free of %u entries", (unsigned)nvs_stats.used_entries,
+                 (unsigned)nvs_stats.free_entries, (unsigned)nvs_stats.total_entries);
+    }
+
     ESP_LOGI(TAG, "Free memory: internal %u KB, PSRAM %u KB",
              static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
              static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
@@ -341,6 +348,9 @@ void Run() {
                 look = LookForStatus(status);
             }
         }
+
+        g_action.SetLedPattern(AgentLink::Get().remote() ? Action::LedPattern::kFastBlink
+                                                         : Action::LedPattern::kSteady);
 
         // While a host owns the face it also owns the look; she keeps breathing.
         if (!AgentLink::Get().OwnsFace()) {

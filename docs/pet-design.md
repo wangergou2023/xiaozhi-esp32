@@ -610,3 +610,23 @@ I (8502) PetEars: Heard her name:  ni hao xiao mi (prob 0.07)
   低概率同时压住了误触。
 - 录音回传（`pet.record` / `pet.mic`）两次尝试都把设备搞进看门狗或重启，
   已经从固件移除；耳朵内部的 5 秒环形缓冲留着，等音频通路真正能互斥了再开。
+
+### 收尾：灵敏度与两处崩溃
+
+手册里最后两项能做出来的缺口：
+
+- **唤醒灵敏度**（§14 参数表）：低/中/高 → 检测阈值 0.08 / 0.05 / 0.03，
+  配网页可改，NVS 键 `wake_sens`。实测 0.03 在安静房间连跑 60 秒零误触。
+- **灯快速闪烁**（§10）：agent 接管时 4 Hz 明灭，交还后回到呼吸。
+
+过程中踩到两个真 bug，都不是"逻辑写错"，而是"边界":
+
+1. **NVS 键名超长**：`wake_sensitivity` 有 16 个字符，NVS 上限 15，于是
+   `nvs_set_i32` 返回 `ESP_ERR_NVS_KEY_TOO_LONG`，而 `Settings::SetInt` 用
+   `ESP_ERROR_CHECK` 包着 —— 保存配网页直接 abort 重启。改成 `wake_sens`。
+   这类错误只在写的时候炸，读的时候静默返回默认值，所以更难发现。
+2. **`pdMS_TO_TICKS(5)` 在这个工程里等于 0**：`CONFIG_FREERTOS_HZ=100`，
+   5 ms 换算成 tick 是 0，`vTaskDelay(0)` 不会让出 CPU 给空闲任务，
+   于是 `pet_link` 任务把 IDLE1 饿死 → 看门狗复位。改成 `vTaskDelay(1)`。
+
+两个 bug 都是"看起来正常的代码在特定配置下不成立"，值得记在文档里。

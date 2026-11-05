@@ -191,7 +191,9 @@ void AgentLink::ReadLoop() {
     while (true) {
         const int received = usb_serial_jtag_read_bytes(chunk, sizeof(chunk), 0);
         if (received <= 0) {
-            vTaskDelay(pdMS_TO_TICKS(5));
+            // One tick, not pdMS_TO_TICKS(5): the tick rate is 100 Hz, so 5 ms
+            // rounds to zero and the idle task never runs (task watchdog).
+            vTaskDelay(1);
             continue;
         }
         for (int i = 0; i < received; i++) {

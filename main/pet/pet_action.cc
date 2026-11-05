@@ -290,7 +290,11 @@ void Action::Tick(float dt) {
     }
 
     led_phase_ += dt * 2.0f * kPi / kLedPeriod;
-    const float pulse = 0.78f + 0.22f * (0.5f + 0.5f * sinf(led_phase_));
+    float pulse = 0.78f + 0.22f * (0.5f + 0.5f * sinf(led_phase_));
+    if (led_pattern_ == LedPattern::kFastBlink) {
+        // 4 Hz on/off: unmistakable "somebody is driving me" without a screen.
+        pulse = fmodf(led_phase_ / (2.0f * kPi) * kLedPeriod, 0.25f) < 0.125f ? 1.0f : 0.0f;
+    }
     PushColor(pulse);
 }
 

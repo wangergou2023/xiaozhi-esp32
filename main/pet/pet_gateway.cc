@@ -160,6 +160,10 @@ std::string Page() {
             std::string(sleep_end) + "\">";
     html += "<label>唤醒词（拼音，例如 xiao mi）</label><input name=\"wake_phrase\" value=\"" +
             Escape(Ears::Get().phrase()) + "\">";
+    html += "<label>唤醒灵敏度</label><select name=\"wake_sensitivity\">" +
+            SelectOption(0, Ears::Get().sensitivity(), "低") +
+            SelectOption(1, Ears::Get().sensitivity(), "中") +
+            SelectOption(2, Ears::Get().sensitivity(), "高") + "</select>";
     html += "<label>对时（留空就不改）</label>"
             "<input name=\"clock\" type=\"datetime-local\">";
     html += "<button type=\"submit\">保存</button></form></body></html>";
@@ -371,6 +375,11 @@ void Gateway::ApplyForm(const std::string& body) {
         Ears::Get().Stop();
         Ears::Get().SetPhrase(wake_phrase);
         Ears::Get().Start();
+    }
+
+    const std::string sensitivity = FormField(body, "wake_sensitivity");
+    if (!sensitivity.empty()) {
+        Ears::Get().SetSensitivity(atoi(sensitivity.c_str()));
     }
 
     const std::string clock = FormField(body, "clock");

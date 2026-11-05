@@ -40,6 +40,12 @@ public:
     // up so the phone can read the SSID off the screen.
     void ShowBanner(const char* line1, const char* line2);
     void HideBanner();
+    // How the LED behaves on top of its colour.
+    enum class LedPattern : uint8_t {
+        kSteady,  // slow breathing, the idle look
+        kFastBlink,  // a host has taken over (docs/pet-manual.md §10)
+    };
+    void SetLedPattern(LedPattern pattern) { led_pattern_ = pattern; }
     // LED colour, already dimmed by the caller.
     void SetColor(uint8_t red, uint8_t green, uint8_t blue);
     // Advance the idle motion (breathing, blink, LED pulse). dt in seconds.
@@ -73,6 +79,7 @@ private:
     uint8_t led_r_ = 0, led_g_ = 0, led_b_ = 0;
     float led_phase_ = 0.0f;
     bool led_dirty_ = false;
+    LedPattern led_pattern_ = LedPattern::kSteady;
 };
 
 }  // namespace kitty

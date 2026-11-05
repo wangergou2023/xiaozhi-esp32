@@ -68,6 +68,27 @@ Ears& Ears::Get() {
     return instance;
 }
 
+int Ears::sensitivity() {
+    Settings settings("pet", false);
+    return settings.GetInt("wake_sens", 1);
+}
+
+void Ears::SetSensitivity(int level) {
+    if (level < 0) {
+        level = 0;
+    } else if (level > 2) {
+        level = 2;
+    }
+    Settings settings("pet", true);
+    settings.SetInt("wake_sens", level);
+    if (model_data_ != nullptr) {
+        std::lock_guard<std::mutex> lock(model_mutex_);
+        static const float thresholds[] = {0.08f, 0.05f, 0.03f};
+        model_->set_det_threshold(model_data_, thresholds[level]);
+        ESP_LOGI(TAG, "Wake sensitivity %d (threshold %.2f)", level, thresholds[level]);
+    }
+}
+
 std::string Ears::phrase() {
     Settings settings("pet", false);
     return settings.GetString("wake_phrase", kDefaultPhrase);
@@ -117,7 +138,9 @@ bool Ears::Start() {
     if (model_data_ != nullptr && !commands_ready_) {
         const esp_mn_iface_t* iface = model_;
         chunk_samples_ = iface->get_samp_chunksize(model_data_);
-        iface->set_det_threshold(model_data_, 0.05f);
+        static const float thresholds[] = {0.08f, 0.05f, 0.03f};
+        const int level = sensitivity();
+        iface->set_det_threshold(model_data_, thresholds[level]);
         phrase_ = phrase();
         // The command list needs a root node before anything can be added; the
         // "clear" API silently refuses to work without it.
@@ -258,7 +281,7 @@ void Ears::Run() {
         }
         if (!have_audio) {
             ESP_LOGW(TAG, "No input samples");
-            vTaskDelay(pdMS_TO_TICKS(10));
+            vTaskDelay(1);
             continue;
         }
 
