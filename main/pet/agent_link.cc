@@ -10,6 +10,7 @@
 
 #include "pet/pet_action.h"
 #include "pet/pet_core.h"
+#include "pet/pet_gateway.h"
 
 namespace kitty {
 namespace {
@@ -22,7 +23,7 @@ constexpr const char* kFirmware = "kitty-pet 0.2.0";
 const char* const kCapabilities[] = {
     "pet.face", "pet.look", "pet.attention", "pet.status", "pet.feed",
     "pet.clean", "pet.play", "pet.task", "pet.sleep", "pet.wake", "pet.night",
-    "pet.time", "pet.ping",
+    "pet.time", "pet.config", "pet.ping",
 };
 
 // The art has no emotion faces, so a requested emotion picks the closest
@@ -253,6 +254,27 @@ void AgentLink::HandleLine(char* line) {
         return;
     }
 
+    if (name == "pet.config") {
+        // Not in the design's primitive list: it exists so a host can open the
+        // same page the BOOT long press opens, which is also how it gets tested.
+        const cJSON* on = cJSON_GetObjectItem(params, "on");
+        const bool open = cJSON_IsBool(on) ? cJSON_IsTrue(on) : true;
+        cJSON* result = cJSON_CreateObject();
+        if (open) {
+            const bool started = Gateway::Get().Start();
+            cJSON_AddBoolToObject(result, "ok", started);
+            if (started) {
+                cJSON_AddStringToObject(result, "ssid", Gateway::Get().ssid().c_str());
+                cJSON_AddStringToObject(result, "url", "http://192.168.4.1/");
+            }
+        } else {
+            Gateway::Get().Stop();
+            cJSON_AddBoolToObject(result, "ok", true);
+        }
+        reply(result);
+        return;
+    }
+
     if (name == "pet.time") {
         const cJSON* epoch = cJSON_GetObjectItem(params, "epoch");
         if (!cJSON_IsNumber(epoch)) {
@@ -316,17 +338,17 @@ void AgentLink::HandleLine(char* line) {
     }
 
     if (name == "pet.feed") {
-        core.Feed();
+        core.Feed(true);
         reply(StatusJson(core.status()));
         return;
     }
     if (name == "pet.clean") {
-        core.Clean();
+        core.Clean(true);
         reply(StatusJson(core.status()));
         return;
     }
     if (name == "pet.play") {
-        core.Play();
+        core.Play(true);
         reply(StatusJson(core.status()));
         return;
     }

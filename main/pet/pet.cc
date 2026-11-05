@@ -14,6 +14,7 @@
 #include "pet/agent_link.h"
 #include "pet/pet_action.h"
 #include "pet/pet_audio.h"
+#include "pet/pet_gateway.h"
 #include "pet/pet_behavior.h"
 #include "pet/pet_core.h"
 #include "pet/pet_expression.h"
@@ -116,11 +117,16 @@ void HandleGesture(Gesture gesture) {
             }
             break;
         case Gesture::kBootLongPress:
-            // The SoftAP configuration page is V3 in the design; until then the
-            // gesture is acknowledged with a look so it does not feel dead.
-            ESP_LOGW(TAG, "Configuration mode is not implemented yet");
-            PetAudio::Get().Play(Voice::kSigh);
-            ReactionLook(Clip::kReview, 200, 2.0f, status);
+            // Long press opens the configuration hotspot (docs/pet-design.md §11).
+            if (Gateway::Get().active()) {
+                Gateway::Get().Stop();
+                g_action.HideBanner();
+            } else if (Gateway::Get().Start()) {
+                g_action.ShowBanner(Gateway::Get().ssid().c_str(), "192.168.4.1");
+                PetAudio::Get().Play(Voice::kHappy);
+            } else {
+                PetAudio::Get().Play(Voice::kSigh);
+            }
             break;
         case Gesture::kPowerClick: {
             // Clean or play, whichever is more urgent right now.
@@ -164,6 +170,16 @@ void ApplyLook(const Look& look) {
     g_action.SetBreathing(look.breath_px);
     g_action.SetScreenLevel(look.screen_level);
     g_action.SetColor(look.red, look.green, look.blue);
+}
+
+// Personality only changes how often she does something on her own.
+float TempoFor(int personality) {
+    switch (personality) {
+        case 0: return 0.7f;   // clingy
+        case 2: return 1.7f;   // cold
+        case 3: return 0.5f;   // lively
+        default: return 1.0f;
+    }
 }
 
 void Greet() {
@@ -229,6 +245,12 @@ void Run() {
         } else if (core.status().mode == Mode::kRemote) {
             core.SetMode(UsbHostAttached() ? Mode::kDocked : Mode::kAutonomous);
         }
+
+        Gateway::Get().Tick(dt);
+        if (!Gateway::Get().active()) {
+            g_action.HideBanner();
+        }
+        g_behavior.SetTempo(TempoFor(core.personality()));
 
         // The host may also send her to bed.
         if (core.night() != g_night) {

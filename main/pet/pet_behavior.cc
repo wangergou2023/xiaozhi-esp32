@@ -22,6 +22,16 @@ Intent PickIntent(const Status& status) {
         {Intent::kDoze, 4},
     };
 
+    // Growth unlocks variety (design §6): a baby only looks around and sleeps,
+    // a grown one stretches, a mature one also gets excited.
+    for (auto& entry : table) {
+        if (status.stage == Stage::kBaby && (entry.intent == Intent::kHop || entry.intent == Intent::kStretch)) {
+            entry.weight = 0;
+        } else if (status.stage == Stage::kGrown && entry.intent == Intent::kHop) {
+            entry.weight = 0;
+        }
+    }
+
     // Tired pets yawn and doze more; content pets fidget more.
     for (auto& entry : table) {
         switch (entry.intent) {
@@ -82,7 +92,7 @@ Intent Behavior::Tick(float dt, const Status& status) {
     } else if (status.mood == Mood::kHappy) {
         base = 12.0f;
     }
-    next_in_ = base + static_cast<float>(esp_random() % 1000) / 1000.0f * base;
+    next_in_ = (base + static_cast<float>(esp_random() % 1000) / 1000.0f * base) * tempo_;
     return PickIntent(status);
 }
 

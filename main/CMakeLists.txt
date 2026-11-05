@@ -53,6 +53,7 @@ if(CONFIG_KITTY_PET_MODE)
         "pet/agent_link.cc"
         "pet/pet_action.cc"
         "pet/pet_audio.cc"
+        "pet/pet_gateway.cc"
         "pet/pet_behavior.cc"
         "pet/pet_core.cc"
         "pet/pet_expression.cc"
@@ -1231,6 +1232,8 @@ idf_component_register(SRCS ${SOURCES}
                         esp_driver_gpio
                         esp_driver_uart
                         esp_driver_usb_serial_jtag
+                        esp_wifi
+                        esp_http_server
                         esp_driver_spi
                         esp_driver_i2c
                         esp_driver_i2s

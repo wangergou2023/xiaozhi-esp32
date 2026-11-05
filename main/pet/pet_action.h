@@ -36,6 +36,10 @@ public:
     void SetLook(int dx, int dy);
     // Backlight level 0-100.
     void SetScreenLevel(uint8_t level);
+    // A small dark panel over the face, used while the configuration hotspot is
+    // up so the phone can read the SSID off the screen.
+    void ShowBanner(const char* line1, const char* line2);
+    void HideBanner();
     // LED colour, already dimmed by the caller.
     void SetColor(uint8_t red, uint8_t green, uint8_t blue);
     // Advance the idle motion (breathing, blink, LED pulse). dt in seconds.
@@ -49,6 +53,8 @@ private:
     Lamp* lamp_ = nullptr;
     Backlight* backlight_ = nullptr;
     lv_obj_t* image_ = nullptr;
+    lv_obj_t* banner_ = nullptr;
+    lv_obj_t* banner_label_ = nullptr;
 
     int clip_ = -1;
     int frame_ms_ = 0;

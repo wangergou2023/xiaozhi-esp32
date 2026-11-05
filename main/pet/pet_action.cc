@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include <esp_heap_caps.h>
@@ -164,6 +165,44 @@ void Action::Freeze(Clip clip, int frame) {
     clip_ = index;
     frame_ms_ = 0;
     frozen_frame_ = frame;
+}
+
+void Action::ShowBanner(const char* line1, const char* line2) {
+    if (!ready()) {
+        return;
+    }
+    char text[64] = {};
+    snprintf(text, sizeof(text), "%s\n%s", line1 != nullptr ? line1 : "",
+             line2 != nullptr ? line2 : "");
+    DisplayLockGuard lock(display_);
+    if (!lock) {
+        return;
+    }
+    if (banner_ == nullptr) {
+        banner_ = lv_obj_create(lv_layer_top());
+        lv_obj_remove_style_all(banner_);
+        lv_obj_set_size(banner_, PET_FRAME_W, 52);
+        lv_obj_align(banner_, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_bg_color(banner_, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(banner_, LV_OPA_80, 0);
+        banner_label_ = lv_label_create(banner_);
+        lv_obj_set_style_text_color(banner_label_, lv_color_white(), 0);
+        lv_obj_set_style_text_font(banner_label_, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_align(banner_label_, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(banner_label_, LV_ALIGN_CENTER, 0, 0);
+    }
+    lv_label_set_text(banner_label_, text);
+    lv_obj_remove_flag(banner_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void Action::HideBanner() {
+    if (banner_ == nullptr || display_ == nullptr) {
+        return;
+    }
+    DisplayLockGuard lock(display_);
+    if (lock) {
+        lv_obj_add_flag(banner_, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 void Action::SetBreathing(float amplitude_px) {

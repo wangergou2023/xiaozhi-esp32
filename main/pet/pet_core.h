@@ -31,10 +31,13 @@ public:
 
     // Interactions (docs/pet-design.md §7). Each one is a gesture the human or
     // the agent can trigger; the numbers move the same way either way.
-    void Poke();            // 摸摸头
-    void Feed();            // 喂食
-    void Clean();           // 清洁
-    void Play();            // 陪玩
+    // `by_agent` is the design's leash (§10.3): when the host does the caring it
+    // only counts half, and it cannot top her up past a cap. Only a human can
+    // bring her all the way back.
+    void Poke();                              // 摸摸头
+    void Feed(bool by_agent = false);         // 喂食
+    void Clean(bool by_agent = false);        // 清洁
+    void Play(bool by_agent = false);         // 陪玩
     void AgentTaskDone();   // agent 完成一次任务
     void AgentTaskFailed(); // agent 报错 / 被打断
     void ForceSleep();
@@ -60,6 +63,8 @@ public:
     void SetDifficulty(int difficulty);
     std::string name();
     void SetName(const std::string& name);
+    int personality();  // 0 clingy, 1 normal, 2 cold, 3 lively
+    void SetPersonality(int personality);
     int sleep_start_minute();
     int sleep_end_minute();
     void SetSleepWindow(int start_minute, int end_minute);
@@ -99,6 +104,7 @@ private:
     bool has_clock_ = false;
     int64_t epoch_base_ = 0;
     int64_t epoch_us_ = 0;
+    int personality_ = 1;
     int tz_offset_minute_ = 8 * 60;  // UTC+8 until a host says otherwise
     int sleep_start_minute_ = 23 * 60;
     int sleep_end_minute_ = 7 * 60;

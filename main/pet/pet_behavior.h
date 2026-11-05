@@ -28,9 +28,12 @@ public:
     Intent Tick(float dt, const Status& status);
     // A human or the agent just interacted: she is busy, postpone self-actions.
     void NoteInteraction();
+    // Personality stretches or shrinks the time between self-actions.
+    void SetTempo(float tempo) { tempo_ = tempo < 0.2f ? 0.2f : tempo; }
 
 private:
     float next_in_ = 6.0f;
+    float tempo_ = 1.0f;
 };
 
 }  // namespace kitty

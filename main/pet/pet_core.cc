@@ -25,6 +25,10 @@ constexpr float kDockedChargePerHour = 20.0f;  // on a cable she tops up slowly
 
 // She does not notice you are gone for a while; then she does.
 constexpr float kNeglectGrace = 20.0f * 60.0f;
+
+// The host can keep her alive but not thriving: care given by the agent only
+// counts half and stops working below 100.
+constexpr float kAgentCareCap = 85.0f;
 constexpr float kSaveInterval = 60.0f;
 
 // Energy thresholds. Below kSleepAt she drops off by herself, below kWakeAt she
@@ -60,6 +64,7 @@ void PetCore::Load() {
     name_ = settings.GetString("name", "Kitty");
     asleep_ = settings.GetBool("asleep", false);
     tz_offset_minute_ = settings.GetInt("tz_offset", 8 * 60);
+    personality_ = settings.GetInt("personality", 1);
     sleep_start_minute_ = settings.GetInt("sleep_start", 23 * 60);
     sleep_end_minute_ = settings.GetInt("sleep_end", 7 * 60);
     ClampAll();
@@ -84,6 +89,7 @@ void PetCore::Save() {
     settings.SetString("name", name_);
     settings.SetBool("asleep", asleep_);
     settings.SetInt("tz_offset", tz_offset_minute_);
+    settings.SetInt("personality", personality_);
     settings.SetInt("sleep_start", sleep_start_minute_);
     settings.SetInt("sleep_end", sleep_end_minute_);
     save_left_ = kSaveInterval;
@@ -185,22 +191,31 @@ void PetCore::Poke() {
     Refresh();
 }
 
-void PetCore::Feed() {
+void PetCore::Feed(bool by_agent) {
     if (asleep_) {
         return;
     }
-    hunger_ += 25.0f;
-    affection_ += 1.0f;
+    const float gain = by_agent ? 12.0f : 25.0f;
+    if (by_agent && hunger_ >= kAgentCareCap) {
+        ESP_LOGI(TAG, "Agent fed her but she is already full enough");
+        return;
+    }
+    hunger_ += gain;
+    affection_ += by_agent ? 0.5f : 1.0f;
     interactions_++;
     happy_left_ = 5.0f;
     Touch();
     ClampAll();
     Refresh();
-    ESP_LOGI(TAG, "Fed: hunger %.0f", hunger_);
+    ESP_LOGI(TAG, "Fed%s: hunger %.0f", by_agent ? " by agent" : "", hunger_);
 }
 
-void PetCore::Clean() {
-    clean_ += 35.0f;
+void PetCore::Clean(bool by_agent) {
+    if (by_agent && clean_ >= kAgentCareCap) {
+        ESP_LOGI(TAG, "Agent cleaned her but she is already clean enough");
+        return;
+    }
+    clean_ += by_agent ? 18.0f : 35.0f;
     affection_ += 1.0f;
     interactions_++;
     happy_left_ = 4.0f;
@@ -210,11 +225,15 @@ void PetCore::Clean() {
     ESP_LOGI(TAG, "Cleaned: clean %.0f", clean_);
 }
 
-void PetCore::Play() {
+void PetCore::Play(bool by_agent) {
     if (asleep_) {
         return;
     }
-    affection_ += 3.0f;
+    if (by_agent && affection_ >= kAgentCareCap) {
+        ESP_LOGI(TAG, "Agent played with her but she wants a human");
+        return;
+    }
+    affection_ += by_agent ? 1.0f : 3.0f;
     energy_ -= 2.0f;
     hunger_ -= 2.0f;
     interactions_++;
@@ -325,6 +344,19 @@ void PetCore::SetNight(bool on) {
     status_.night = on;
     changed_ = true;
     ESP_LOGI(TAG, "Night mode %s", on ? "on" : "off");
+}
+
+int PetCore::personality() {
+    if (!loaded_) {
+        Load();
+    }
+    return personality_;
+}
+
+void PetCore::SetPersonality(int personality) {
+    personality_ = std::clamp(personality, 0, 3);
+    Save();
+    ESP_LOGI(TAG, "Personality %d", personality_);
 }
 
 int PetCore::sleep_start_minute() {
