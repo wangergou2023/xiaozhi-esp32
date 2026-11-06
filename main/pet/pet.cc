@@ -349,6 +349,12 @@ void Run() {
             }
         }
 
+        // The lamp always speaks for her body, even while a host owns the face:
+        // the host borrows the face, not the whole animal. Without this she went
+        // dark the moment an agent connected, because ApplyLook stopped running.
+        const Look led_look = LookForStatus(status);
+        Action::Get().SetColor(led_look.red, led_look.green, led_look.blue);
+
         // Colour says how she feels (pet_expression.cc), rhythm says what is
         // going on: fast blink = a host owns her, double blink = hungry,
         // slow deep breathing = drowsy or lonely, plain breathing = fine.

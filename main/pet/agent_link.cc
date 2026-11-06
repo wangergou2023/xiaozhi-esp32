@@ -101,6 +101,14 @@ cJSON* StatusJson(const Status& status) {
     cJSON_AddBoolToObject(json, "sleeping", status.sleeping);
     cJSON_AddBoolToObject(json, "night", status.night);
     cJSON_AddNumberToObject(json, "calls", status.calls);
+    // What the lamp is actually being told to show, so a host can debug colour
+    // problems without a camera pointed at the board.
+    cJSON* led = cJSON_CreateObject();
+    cJSON_AddNumberToObject(led, "r", Action::Get().led_r());
+    cJSON_AddNumberToObject(led, "g", Action::Get().led_g());
+    cJSON_AddNumberToObject(led, "b", Action::Get().led_b());
+    cJSON_AddNumberToObject(led, "level", Action::Get().led_level());
+    cJSON_AddItemToObject(json, "led", led);
     return json;
 }
 

@@ -66,6 +66,10 @@ public:
     // 0 turns the lamp off, 100 is full brightness. Saved in NVS unless told not to.
     void SetLedLevel(int percent, bool save = true);
     int led_level() const { return led_level_; }
+    // The colour last pushed to the strip, after pattern, level and flash.
+    int led_r() const { return led_r_; }
+    int led_g() const { return led_g_; }
+    int led_b() const { return led_b_; }
     // Advance the idle motion (breathing, blink, LED pulse). dt in seconds.
     void Tick(float dt);
 
