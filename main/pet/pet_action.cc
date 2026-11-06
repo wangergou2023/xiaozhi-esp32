@@ -81,7 +81,19 @@ void Action::Attach(Display* display, Lamp* lamp, Backlight* backlight) {
     display_ = display;
     lamp_ = lamp;
     backlight_ = backlight;
-    led_level_ = Settings("kitty", false).GetInt("led", 100);
+    // The lamp is off unless the user asks for it. It was on by default in the
+    // first build and read as a white light that blinked whenever a host
+    // connected, which is not what someone wants on a desk.
+    Settings settings("kitty", false);
+    led_level_ = settings.GetInt("led", 0);
+    if (settings.GetInt("led_rev", 0) < 1) {
+        // One-time migration for devices that already stored the old default of
+        // 100: nobody chose that number, so put them back to off.
+        led_level_ = 0;
+        Settings save("kitty", true);
+        save.SetInt("led", 0);
+        save.SetInt("led_rev", 1);
+    }
     if (led_level_ < 0) {
         led_level_ = 0;
     } else if (led_level_ > 100) {
