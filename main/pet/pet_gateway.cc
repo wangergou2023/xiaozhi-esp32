@@ -230,6 +230,11 @@ button:active{transform:scale(.995)}
                            SelectOption(1, core.personality(), "标准") +
                            SelectOption(2, core.personality(), "冷淡 · 自己待着") +
                            SelectOption(3, core.personality(), "活泼 · 闲不住") + "</select>");
+    character += "<div class=\"field\"><span>爱睡觉 <b id=\"dozeValue\">" +
+                 std::to_string(core.doze_weight()) +
+                 "</b></span><input id=\"doze\" name=\"doze\" type=\"range\" min=\"0\" max=\"100\" "
+                 "value=\"" + std::to_string(core.doze_weight()) + "\">"
+                 "<p class=\"hint\">打瞌睡的频率：0 = 完全不打瞌睡，100 = 几乎总在睡</p></div>";
     html += Card("脾气", character);
 
     std::string routine;
@@ -248,7 +253,7 @@ button:active{transform:scale(.995)}
     html += R"HTML(<div class="bar"><button type="submit">保存并关闭热点</button>
 <p class="foot">只在这里改参数；她不联网，热点只是短暂的设置通道。</p></div>
 </form></div><script>
-for (const id of ['volume','brightness','led']) {
+for (const id of ['volume','brightness','led','doze']) {
   const input = document.getElementById(id);
   const out = document.getElementById(id + 'Value');
   if (input && out) input.addEventListener('input', () => { out.textContent = input.value; });
@@ -591,6 +596,11 @@ void Gateway::ApplyForm(const std::string& body) {
     const std::string personality = FormField(body, "personality");
     if (!personality.empty()) {
         core.SetPersonality(atoi(personality.c_str()));
+    }
+
+    const std::string doze = FormField(body, "doze");
+    if (!doze.empty()) {
+        core.SetDozeWeight(atoi(doze.c_str()));
     }
 
     const int hours_start = ParseMinutes(FormField(body, "sleep_start"), core.sleep_start_minute());

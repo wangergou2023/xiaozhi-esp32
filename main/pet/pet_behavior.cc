@@ -10,6 +10,8 @@ struct WeightedIntent {
     int weight;
 };
 
+int g_doze_weight = 50;
+
 // The whole offline "intelligence": a weighted table, modulated by her numbers.
 // docs/pet-design.md §10: no language model, deterministic enough to test.
 Intent PickIntent(const Status& status) {
@@ -19,7 +21,7 @@ Intent PickIntent(const Status& status) {
         {Intent::kStretch, 12},
         {Intent::kYawn, 10},
         {Intent::kHop, 6},
-        {Intent::kDoze, 50},  // idle time is mostly napping
+        {Intent::kDoze, g_doze_weight},  // how much she naps, set on the page
     };
 
     // Growth unlocks variety (design §6): a baby only looks around and sleeps,
@@ -75,6 +77,10 @@ Intent PickIntent(const Status& status) {
 }
 
 }  // namespace
+
+void Behavior::SetDozeWeight(int weight) {
+    g_doze_weight = weight < 0 ? 0 : (weight > 100 ? 100 : weight);
+}
 
 Intent Behavior::Tick(float dt, const Status& status) {
     if (dt <= 0.0f) {

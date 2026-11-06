@@ -66,6 +66,7 @@ void PetCore::Load() {
     tz_offset_minute_ = settings.GetInt("tz_offset", 8 * 60);
     calls_ = settings.GetInt("calls", 0);
     personality_ = settings.GetInt("personality", 1);
+    doze_weight_ = settings.GetInt("doze", 50);
     sleep_start_minute_ = settings.GetInt("sleep_start", 23 * 60);
     sleep_end_minute_ = settings.GetInt("sleep_end", 7 * 60);
     ClampAll();
@@ -92,6 +93,7 @@ void PetCore::Save() {
     settings.SetInt("tz_offset", tz_offset_minute_);
     settings.SetInt("calls", calls_);
     settings.SetInt("personality", personality_);
+    settings.SetInt("doze", doze_weight_);
     settings.SetInt("sleep_start", sleep_start_minute_);
     settings.SetInt("sleep_end", sleep_end_minute_);
     save_left_ = kSaveInterval;
@@ -378,6 +380,19 @@ void PetCore::SetPersonality(int personality) {
     personality_ = std::clamp(personality, 0, 3);
     Save();
     ESP_LOGI(TAG, "Personality %d", personality_);
+}
+
+int PetCore::doze_weight() {
+    if (!loaded_) {
+        Load();
+    }
+    return doze_weight_;
+}
+
+void PetCore::SetDozeWeight(int weight) {
+    doze_weight_ = std::clamp(weight, 0, 100);
+    Save();
+    ESP_LOGI(TAG, "Doze weight %d", doze_weight_);
 }
 
 int PetCore::sleep_start_minute() {

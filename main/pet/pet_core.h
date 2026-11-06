@@ -68,6 +68,8 @@ public:
     void SetName(const std::string& name);
     int personality();  // 0 clingy, 1 normal, 2 cold, 3 lively
     void SetPersonality(int personality);
+    int doze_weight();  // 0-100, how often she naps when idle; 0 = never
+    void SetDozeWeight(int weight);
     int sleep_start_minute();
     int sleep_end_minute();
     void SetSleepWindow(int start_minute, int end_minute);
@@ -109,6 +111,7 @@ private:
     int64_t epoch_us_ = 0;
     int calls_ = 0;
     int personality_ = 1;
+    int doze_weight_ = 50;
     int tz_offset_minute_ = 8 * 60;  // UTC+8 until a host says otherwise
     int sleep_start_minute_ = 23 * 60;
     int sleep_end_minute_ = 7 * 60;

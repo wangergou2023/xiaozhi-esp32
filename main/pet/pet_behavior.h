@@ -30,6 +30,7 @@ public:
     void NoteInteraction();
     // Personality stretches or shrinks the time between self-actions.
     void SetTempo(float tempo) { tempo_ = tempo < 0.2f ? 0.2f : tempo; }
+    void SetDozeWeight(int weight);
 
 private:
     float next_in_ = 6.0f;

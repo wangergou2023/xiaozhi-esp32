@@ -309,6 +309,7 @@ void Run() {
             Action::Get().HideBanner();
         }
         g_behavior.SetTempo(TempoFor(core.personality()));
+        g_behavior.SetDozeWeight(core.doze_weight());
 
         // The host may also send her to bed.
         if (core.night() != g_night) {
