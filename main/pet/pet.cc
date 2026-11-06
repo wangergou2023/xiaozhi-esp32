@@ -387,6 +387,8 @@ void Run() {
             pattern = Action::LedPattern::kSlowBreath;
         }
         Action::Get().SetLedPattern(pattern);
+        Action::Get().SetHud(static_cast<int>(status.affection), static_cast<int>(status.hunger),
+                             Gateway::Get().active(), status.mode != Mode::kAutonomous);
 
         // While a host owns the face it also owns the look; she keeps breathing.
         if (!AgentLink::Get().OwnsFace()) {

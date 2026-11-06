@@ -67,6 +67,80 @@ bool LoadFrames() {
     return true;
 }
 
+// The HUD lives in a 40 px strip beside her face. Icons are pixel art because
+// there is no icon font at this size, and the heart/bowl fill from the bottom so
+// the level is readable at a glance.
+constexpr int kHudW = 40;    // viewer space
+constexpr int kHudH = 128;
+constexpr int kHudBand = 40;  // panel rows the HUD occupies after the transform
+
+const char* const kHeartRows[] = {
+    "...####...####...",
+    "..#####.#####....",
+    ".##############..",
+    "################.",
+    "################.",
+    "################.",
+    ".##############..",
+    "..############...",
+    "...##########....",
+    "....########.....",
+    ".....######......",
+    "......####.......",
+    ".......##........",
+};
+constexpr int kHeartRowsCount = 13;
+
+const char* const kPlugRows[] = {
+    "....##..##....",
+    "....##..##....",
+    "...########...",
+    "...########...",
+    "...########...",
+    ".....####.....",
+};
+constexpr int kPlugRowsCount = 6;
+
+// The board has no battery sense, so this is an outline and nothing else: it
+// says "there is no charge reading", not "empty".
+const char* const kBatteryRows[] = {
+    "###########...",
+    "#.........#.#.",
+    "#.........#.#.",
+    "#.........#.#.",
+    "#.........#...",
+    "###########...",
+};
+constexpr int kBatteryRowsCount = 6;
+
+const char* const kBowlRows[] = {
+    "..................",
+    "...###########....",
+    ".################.",
+    ".################.",
+    ".################.",
+    "..##############..",
+    "...############...",
+    "....##########....",
+    ".....########.....",
+    "......######......",
+};
+constexpr int kBowlRowsCount = 10;
+
+void DrawRows(lv_obj_t* canvas, int ox, int oy, const char* const* rows, int height,
+              lv_color_t on, lv_color_t off, int fill_percent) {
+    const int filled_from = height - 1 - (height - 1) * fill_percent / 100;
+    for (int y = 0; y < height; y++) {
+        const char* row = rows[y];
+        for (int x = 0; row[x] != '\0'; x++) {
+            if (row[x] != '#') {
+                continue;
+            }
+            lv_canvas_set_px(canvas, ox + x, oy + y, y >= filled_from ? on : off, LV_OPA_COVER);
+        }
+    }
+}
+
 }  // namespace
 
 Action& Action::Get() {
@@ -113,7 +187,31 @@ void Action::Attach(Display* display, Lamp* lamp, Backlight* backlight) {
     image_ = lv_animimg_create(lv_layer_top());
     lv_obj_remove_style_all(image_);
     lv_obj_set_size(image_, PET_FRAME_W, PET_FRAME_H);
-    lv_obj_align(image_, LV_ALIGN_CENTER, 0, 0);
+    // The face sits at the top of the square panel; the bottom 40 rows are the
+    // HUD band once the image is rotated by the beam splitter.
+    lv_obj_align(image_, LV_ALIGN_TOP_MID, 0, 0);
+
+    hud_canvas_buf_ = static_cast<uint8_t*>(heap_caps_malloc(kHudW * kHudH * 2, MALLOC_CAP_SPIRAM));
+    hud_image_buf_ = static_cast<uint8_t*>(heap_caps_malloc(kHudW * kHudH * 2, MALLOC_CAP_SPIRAM));
+    if (hud_canvas_buf_ != nullptr && hud_image_buf_ != nullptr) {
+        hud_canvas_ = lv_canvas_create(lv_layer_top());
+        lv_canvas_set_buffer(hud_canvas_, hud_canvas_buf_, kHudW, kHudH, LV_COLOR_FORMAT_RGB565);
+        lv_obj_add_flag(hud_canvas_, LV_OBJ_FLAG_HIDDEN);
+
+        memset(&hud_dsc_, 0, sizeof(hud_dsc_));
+        hud_dsc_.header.magic = LV_IMAGE_HEADER_MAGIC;
+        hud_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
+        hud_dsc_.header.w = kHudH;   // rotated: 128 wide
+        hud_dsc_.header.h = kHudBand;  // and 40 tall
+        hud_dsc_.header.stride = kHudH * 2;
+        hud_dsc_.data_size = kHudW * kHudH * 2;
+        hud_dsc_.data = hud_image_buf_;
+        hud_image_ = lv_image_create(lv_layer_top());
+        lv_image_set_src(hud_image_, &hud_dsc_);
+        lv_obj_align(hud_image_, LV_ALIGN_BOTTOM_MID, 0, 0);
+    } else {
+        ESP_LOGW(TAG, "No PSRAM for the HUD strip");
+    }
     ESP_LOGI(TAG, "Face ready (%dx%d)", PET_FRAME_W, PET_FRAME_H);
 }
 
@@ -331,6 +429,74 @@ void Action::SetLedLevel(int percent, bool save) {
     }
     led_dirty_ = true;
     PushColor(red_, green_, blue_, 1.0f);
+}
+
+void Action::SetHud(int affection, int hunger, bool wifi, bool usb) {
+    if (hud_canvas_ == nullptr) {
+        return;
+    }
+    const int wifi_flag = wifi ? 1 : 0;
+    const int usb_flag = usb ? 1 : 0;
+    if (affection == hud_affection_ && hunger == hud_hunger_ && wifi_flag == hud_wifi_ &&
+        usb_flag == hud_usb_) {
+        return;
+    }
+    hud_affection_ = affection;
+    hud_hunger_ = hunger;
+    hud_wifi_ = wifi_flag;
+    hud_usb_ = usb_flag;
+
+    DisplayLockGuard lock(display_);
+    if (!lock) {
+        return;
+    }
+    DrawHudLocked();
+}
+
+void Action::DrawHudLocked() {
+    lv_canvas_fill_bg(hud_canvas_, lv_color_black(), LV_OPA_COVER);
+
+    const lv_color_t heart_on = lv_color_hex(0xEB3C5A);
+    const lv_color_t heart_off = lv_color_hex(0x50202E);
+    DrawRows(hud_canvas_, 10, 4, kHeartRows, kHeartRowsCount, heart_on, heart_off, hud_affection_);
+
+    const lv_color_t bowl_on = lv_color_hex(0xFFAA3C);
+    const lv_color_t bowl_off = lv_color_hex(0x50381A);
+    DrawRows(hud_canvas_, 10, 26, kBowlRows, kBowlRowsCount, bowl_on, bowl_off, hud_hunger_);
+
+    // USB: lit when a host is on the other end of the cable (docked or remote).
+    const lv_color_t plug_on = lv_color_hex(0x78C8FF);
+    const lv_color_t plug_off = lv_color_hex(0x2A3D4A);
+    DrawRows(hud_canvas_, 12, 48, kPlugRows, kPlugRowsCount, hud_usb_ ? plug_on : plug_off,
+             hud_usb_ ? plug_on : plug_off, 100);
+
+    // Battery: no sense hardware, so the outline stays dim and empty.
+    DrawRows(hud_canvas_, 12, 64, kBatteryRows, kBatteryRowsCount, lv_color_hex(0x3A3A40),
+             lv_color_hex(0x3A3A40), 0);
+
+    // Four bars: the hotspot is either up or it is not, so they are dim or bright.
+    const lv_color_t bar = hud_wifi_ ? lv_color_hex(0xC8C8D2) : lv_color_hex(0x33333A);
+    for (int i = 0; i < 4; i++) {
+        const int bar_height = 4 + i * 3;
+        for (int y = 0; y < bar_height; y++) {
+            for (int x = 0; x < 3; x++) {
+                lv_canvas_set_px(hud_canvas_, 11 + i * 4 + x, 92 - y, bar, LV_OPA_COVER);
+            }
+        }
+    }
+
+    // Rotate + mirror into the panel band, exactly like the face frames and the
+    // configuration banner: dst_x = 127 - vy, dst_y = 39 - vx.
+    const auto* src = reinterpret_cast<const uint16_t*>(hud_canvas_buf_);
+    auto* dst = reinterpret_cast<uint16_t*>(hud_image_buf_);
+    for (int vx = 0; vx < kHudW; vx++) {
+        for (int vy = 0; vy < kHudH; vy++) {
+            const int dx = kHudH - 1 - vy;
+            const int dy = kHudBand - 1 - vx;
+            dst[dy * kHudH + dx] = src[vy * kHudW + vx];
+        }
+    }
+    lv_obj_invalidate(hud_image_);
 }
 
 void Action::Flash(uint8_t red, uint8_t green, uint8_t blue, int pulses, float seconds) {
