@@ -75,46 +75,58 @@ constexpr int kHudH = 128;
 constexpr int kHudBand = 40;  // panel rows the HUD occupies after the transform
 
 const char* const kHeartRows[] = {
-    "..###......###...",
-    ".####....####....",
-    ".#############...",
-    "################.",
-    "################.",
-    ".##############..",
-    "..############...",
-    "...##########....",
-    "....########.....",
-    ".....######......",
-    "......####.......",
-    ".......##........",
+    "..###......###..",
+    ".#####....#####.",
+    ".##############.",
+    "################",
+    "################",
+    ".##############.",
+    "..############..",
+    "...##########...",
+    "....########....",
+    ".....######.....",
+    "......####......",
+    ".......##.......",
 };
 constexpr int kHeartRowsCount = 12;
 
 const char* const kPlugRows[] = {
-    "....##..##....",
-    "....##..##....",
+    "......##......",
+    "..##..##..##..",
     "...########...",
-    "...########...",
-    "...########...",
-    ".....####.....",
+    "....######....",
+    "......##......",
+    "......##......",
+    "......##......",
 };
-constexpr int kPlugRowsCount = 6;
+constexpr int kPlugRowsCount = 7;
 
 // The board has no battery sense, so this is an outline and nothing else: it
 // says "there is no charge reading", not "empty".
 const char* const kBatteryRows[] = {
     "###########...",
-    "#.........#.#.",
-    "#.........#.#.",
-    "#.........#.#.",
-    "#.........#...",
+    "###########.##",
+    "###########.##",
+    "###########.##",
     "###########...",
 };
-constexpr int kBatteryRowsCount = 6;
+constexpr int kBatteryRowsCount = 5;
+
+// The classic WiFi fan: three arcs and a dot, symmetric about the centre.
+const char* const kWifiRows[] = {
+    "......###......",
+    "....##...##....",
+    "..##..###..##..",
+    "..#.##...##.#..",
+    ".#.##.###.##.#.",
+    ".#.#.#...#.#.#.",
+    ".......#.......",
+};
+constexpr int kWifiRowsCount = 7;
 
 const char* const kBowlRows[] = {
     "..................",
-    "...###########....",
+    "...############...",
     ".################.",
     ".################.",
     ".################.",
@@ -459,34 +471,29 @@ void Action::DrawHudLocked() {
 
     const lv_color_t heart_on = lv_color_hex(0xEB3C5A);
     const lv_color_t heart_off = lv_color_hex(0x692A38);
-    DrawRows(hud_canvas_, 10, 4, kHeartRows, kHeartRowsCount, heart_on, heart_off, hud_affection_);
+    DrawRows(hud_canvas_, 12, 4, kHeartRows, kHeartRowsCount, heart_on, heart_off, hud_affection_);
 
     const lv_color_t bowl_on = lv_color_hex(0xFFAA3C);
     const lv_color_t bowl_off = lv_color_hex(0x694B20);
-    DrawRows(hud_canvas_, 10, 26, kBowlRows, kBowlRowsCount, bowl_on, bowl_off, hud_hunger_);
+    DrawRows(hud_canvas_, 11, 26, kBowlRows, kBowlRowsCount, bowl_on, bowl_off, hud_hunger_);
 
     // USB: lit when a host is on the other end of the cable (docked or remote).
     const lv_color_t plug_on = lv_color_hex(0x78C8FF);
     const lv_color_t plug_off = lv_color_hex(0x2A3D4A);
-    DrawRows(hud_canvas_, 12, 48, kPlugRows, kPlugRowsCount, hud_usb_ ? plug_on : plug_off,
+    DrawRows(hud_canvas_, 13, 48, kPlugRows, kPlugRowsCount, hud_usb_ ? plug_on : plug_off,
              hud_usb_ ? plug_on : plug_off, 100);
 
     // Battery: filled by the real pack voltage (GPIO1 / VBAT_ADC). A negative
     // value means no reading, and the outline stays dim.
     const lv_color_t battery_on = hud_battery_ >= 0 ? lv_color_hex(0x9BE86E) : lv_color_hex(0x3A3A40);
-    DrawRows(hud_canvas_, 12, 64, kBatteryRows, kBatteryRowsCount, battery_on,
+    DrawRows(hud_canvas_, 13, 64, kBatteryRows, kBatteryRowsCount, battery_on,
              lv_color_hex(0x2A2A30), hud_battery_ >= 0 ? hud_battery_ : 0);
 
-    // Four bars: the hotspot is either up or it is not, so they are dim or bright.
-    const lv_color_t bar = hud_wifi_ ? lv_color_hex(0xC8C8D2) : lv_color_hex(0x33333A);
-    for (int i = 0; i < 4; i++) {
-        const int bar_height = 4 + i * 3;
-        for (int y = 0; y < bar_height; y++) {
-            for (int x = 0; x < 3; x++) {
-                lv_canvas_set_px(hud_canvas_, 11 + i * 4 + x, 92 - y, bar, LV_OPA_COVER);
-            }
-        }
-    }
+    // WiFi fan: bright while the hotspot is up, dim otherwise.
+    const lv_color_t wifi_on = lv_color_hex(0xC8C8D2);
+    const lv_color_t wifi_off = lv_color_hex(0x33333A);
+    DrawRows(hud_canvas_, 12, 85, kWifiRows, kWifiRowsCount, hud_wifi_ ? wifi_on : wifi_off,
+             hud_wifi_ ? wifi_on : wifi_off, 100);
 
     // Rotate + mirror into the panel band, exactly like the face frames and the
     // configuration banner: dst_x = 127 - vy, dst_y = 39 - vx.
