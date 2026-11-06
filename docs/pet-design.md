@@ -491,7 +491,7 @@ I (60420) Pet: alive 60s | asleep | h 97 e 52 ...   # 夜间连跑 60 秒，精�
 | 手势 | BOOT 单击摸头 / 双击喂食 / 长按 3 秒开配网；双击失败降级为单击（`iot_button` 自带窗口） |
 | 成长 | 幼体只会张望打瞌睡 → 成长多一个伸懒腰 → 成熟再加雀跃；`behavior.cc` 直接按阶段清零权重 |
 | 代劳上限 | agent 喂/清洁/陪玩只补一半，且补到 85 就补不动（`kAgentCareCap`），人才能补满 |
-| 配网页 | `pet_gateway.cc`：SoftAP `Kitty-XXXX` / `kitty1234`，`http://192.168.4.1/`，3 分钟没人动就关射频 |
+| 配网页 | `pet_gateway.cc`：SoftAP `Kitty-XXXX` / `kitty1234`，`http://192.168.4.1/`，3 分钟没人动就关射频；**带强制门户**（DNS 全解析到本机 + 任意路径 302 回配置页），手机连上会自动弹页面 |
 | 参数 | 名字、音量、亮度、难度、性格、作息起止、手动对时；全部落 NVS |
 | 屏幕上 | 配网期间 `lv_layer_top` 上盖一块黑底小字，显示 SSID 和地址 |
 
@@ -778,4 +778,26 @@ pet_face happy -> ok                   # 表情不再被本地循环覆盖
 pet_night on  -> night: true
 pet_face angry -> -32001               # 夜间拒绝，错误穿到工具层
 pet_wake      -> ok
+```
+
+### 强制门户（手机自动弹配置页）
+
+只有 HTTP 服务时，手机连上热点不会弹任何东西 —— 系统的探测请求要么失败（没有 DNS），
+要么拿到一个 200（我们自己的页面），两种都被判定为"这个网络正常，不需要登录"。
+
+补了两件事：
+
+1. **DNS 兜底**：一个 UDP 53 的小服务，任何 A 查询都答 `192.168.4.1`；
+2. **通配 302**：`httpd` 注册 `/*`，把不是自己页面的请求全部 302 到 `http://192.168.4.1/`。
+
+坑：`httpd_config_t` 默认的 `uri_match_fn` 是精确匹配，`/*` 注册了也永远不会命中
+（日志里只会看到 `URI '/hotspot-detect.html' not found`）。必须显式设成
+`httpd_uri_match_wildcard`。
+
+实测三种系统的探测路径都返回 302：
+
+```
+Host: captive.apple.com          GET /hotspot-detect.html  -> 302 http://192.168.4.1/
+Host: connectivitycheck.gstatic.com GET /generate_204     -> 302
+Host: www.msftconnecttest.com    GET /connecttest.txt     -> 302
 ```

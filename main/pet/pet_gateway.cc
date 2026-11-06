@@ -10,6 +10,8 @@
 #include <esp_mac.h>
 #include <esp_netif.h>
 #include <esp_wifi.h>
+#include <lwip/sockets.h>
+#include <lwip/inet.h>
 
 #include "board.h"
 #include "pet/pet_audio.h"
@@ -207,6 +209,101 @@ esp_err_t SaveHandler(httpd_req_t* request) {
     return ESP_OK;
 }
 
+// Phones decide whether a network needs a login by fetching a known URL and
+// checking the answer (Apple: captive.apple.com/hotspot-detect.html, Android:
+// connectivitycheck.gstatic.com/generate_204, Windows: msftconnecttest.com).
+// A plain 200 with our HTML looks like "this network is fine", so the phone
+// never offers the page. With DNS answering everything with our address, those
+// probes land here: anything that is not our own page gets a redirect, which is
+// what makes the system pop its "sign in" sheet.
+esp_err_t CatchAllHandler(httpd_req_t* request) {
+    // Every unmatched path is a captive-portal probe; send it to the page.
+    Gateway::Get().Touch();
+    httpd_resp_set_status(request, "302 Found");
+    httpd_resp_set_hdr(request, "Location", "http://192.168.4.1/");
+    httpd_resp_set_type(request, "text/html; charset=utf-8");
+    httpd_resp_send(request, "<html><body>Kitty</body></html>", 33);
+    return ESP_OK;
+}
+
+}  // namespace
+
+// A one-answer DNS server: every A query resolves to 192.168.4.1 so the system
+// probes never fail with "no DNS" (which also means "network is fine").
+namespace {
+
+constexpr const char* kPortalIp = "192.168.4.1";
+
+void DnsTask(void* arg) {
+    auto* gateway = static_cast<Gateway*>(arg);
+    int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (socket_fd < 0) {
+        ESP_LOGE(TAG, "DNS socket failed");
+        vTaskDelete(nullptr);
+        return;
+    }
+    sockaddr_in address = {};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(53);
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(socket_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0) {
+        ESP_LOGE(TAG, "DNS bind failed");
+        close(socket_fd);
+        vTaskDelete(nullptr);
+        return;
+    }
+    const uint8_t answer[4] = {192, 168, 4, 1};
+    uint8_t buffer[512];
+    while (gateway->dns_running()) {
+        sockaddr_in from = {};
+        socklen_t from_length = sizeof(from);
+        const int received = recvfrom(socket_fd, buffer, sizeof(buffer), 0,
+                                       reinterpret_cast<sockaddr*>(&from), &from_length);
+        if (received < 12) {
+            continue;
+        }
+        // Walk the question name to find where it ends.
+        int offset = 12;
+        while (offset < received && buffer[offset] != 0) {
+            offset += buffer[offset] + 1;
+        }
+        offset += 1;
+        if (offset + 4 > received) {
+            continue;
+        }
+        const uint16_t query_type = (buffer[offset] << 8) | buffer[offset + 1];
+        int length = offset + 4;
+        if (query_type != 1) {
+            continue;  // only A records matter here
+        }
+        buffer[2] = 0x81;  // QR=1, RD=1
+        buffer[3] = 0x80;  // RA=1, rcode=0
+        buffer[6] = 0;
+        buffer[7] = 1;     // answer count
+        buffer[8] = 0;
+        buffer[9] = 0;
+        buffer[10] = 0;
+        buffer[11] = 0;
+        buffer[length++] = 0xC0;
+        buffer[length++] = 0x0C;  // pointer to the question name
+        buffer[length++] = 0x00;
+        buffer[length++] = 0x01;  // type A
+        buffer[length++] = 0x00;
+        buffer[length++] = 0x01;  // class IN
+        buffer[length++] = 0x00;
+        buffer[length++] = 0x00;
+        buffer[length++] = 0x00;
+        buffer[length++] = 0x3C;  // ttl 60
+        buffer[length++] = 0x00;
+        buffer[length++] = 0x04;  // rdlength
+        memcpy(buffer + length, answer, 4);
+        length += 4;
+        sendto(socket_fd, buffer, length, 0, reinterpret_cast<sockaddr*>(&from), from_length);
+    }
+    close(socket_fd);
+    vTaskDelete(nullptr);
+}
+
 }  // namespace
 
 Gateway& Gateway::Get() {
@@ -270,6 +367,10 @@ bool Gateway::Start() {
     httpd_config_t http_config = HTTPD_DEFAULT_CONFIG();
     http_config.server_port = 80;
     http_config.lru_purge_enable = true;
+    // The captive-portal probes arrive on arbitrary paths; without this the
+    // catch-all below is registered but never matched (the default is exact
+    // string comparison, which is why every probe got a 404).
+    http_config.uri_match_fn = httpd_uri_match_wildcard;
     httpd_handle_t server = nullptr;
     if (httpd_start(&server, &http_config) != ESP_OK) {
         ESP_LOGE(TAG, "httpd_start failed");
@@ -290,7 +391,16 @@ bool Gateway::Start() {
     save.user_ctx = this;
     httpd_register_uri_handler(server, &save);
 
+    httpd_uri_t catch_all = {};
+    catch_all.uri = "/*";
+    catch_all.method = HTTP_GET;
+    catch_all.handler = CatchAllHandler;
+    catch_all.user_ctx = this;
+    httpd_register_uri_handler(server, &catch_all);
+
     server_ = server;
+    dns_running_ = true;
+    xTaskCreate(DnsTask, "pet_dns", 4096, this, 2, (TaskHandle_t*)&dns_task_);
     active_ = true;
     idle_ = kIdleTimeout;
     ESP_LOGI(TAG, "Configuration AP up: %s / %s, http://192.168.4.1/", ssid_.c_str(), kApPassword);
@@ -305,6 +415,8 @@ void Gateway::Stop() {
         httpd_stop(static_cast<httpd_handle_t>(server_));
         server_ = nullptr;
     }
+    dns_running_ = false;
+    dns_task_ = nullptr;
     esp_wifi_stop();
     active_ = false;
     ESP_LOGI(TAG, "Configuration AP down");

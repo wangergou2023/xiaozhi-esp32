@@ -23,6 +23,7 @@ public:
     void Tick(float dt);
 
     const std::string& ssid() const { return ssid_; }
+    bool dns_running() const { return dns_running_; }
 
     // Called by the HTTP handlers.
     void ApplyForm(const std::string& body);
@@ -34,6 +35,8 @@ private:
     Gateway() = default;
     static int ParseMinutes(const std::string& text, int fallback);
     void* server_ = nullptr;    // httpd_handle_t
+    void* dns_task_ = nullptr;  // TaskHandle_t
+    volatile bool dns_running_ = false;
     void* ap_netif_ = nullptr;  // esp_netif_t*, created once and kept
     bool wifi_inited_ = false;
     bool active_ = false;

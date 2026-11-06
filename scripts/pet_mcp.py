@@ -174,6 +174,17 @@ TOOLS = [
         },
     },
     {
+        "name": "pet_config",
+        "description": "Open (or close) her configuration hotspot: SSID Kitty-XXXX, "
+                       "password kitty1234, page at http://192.168.4.1/. It closes "
+                       "itself after three minutes or when the form is saved.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"on": {"type": "boolean"}},
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "pet_ping",
         "description": "Heartbeat. Also resets her three-second host timeout.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -196,6 +207,7 @@ METHODS = {
     "pet_time": "pet.time",
     "pet_say": "pet.say",
     "pet_mic_stats": "pet.mic_stats",
+    "pet_config": "pet.config",
     "pet_ping": "pet.ping",
 }
 
