@@ -947,7 +947,7 @@ HUD 内容是 40×128 的离屏 canvas，画完再做和帧、小黑板完全相
 | 碗 | 饱食，同上 | `hunger` |
 | 插头 | USB 主机在另一头（docked / remote） | `status.mode` |
 | 电池 | **只有轮廓**：本板没有电池检测，这是"没有读数"而不是"空电" | 无 |
-| WiFi 扇面 | 配网热点是否开着，亮/暗两态 | `Gateway::active()` |
+| WiFi 扇面 | 只在配网热点开着时显示，关闭时整个图标消失 | `Gateway::active()` |
 
 只在数值变化时重绘（`SetHud` 里比较缓存），因为整条 HUD 是逐像素写 canvas，
 1 Hz 级别的更新足够，没必要每个 tick 都做。

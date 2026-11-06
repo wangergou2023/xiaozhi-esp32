@@ -479,23 +479,25 @@ void Action::DrawHudLocked() {
     DrawRows(hud_canvas_, 13, 64, kBatteryRows, kBatteryRowsCount, battery_on,
              lv_color_hex(0x2A2A30), hud_battery_ >= 0 ? hud_battery_ : 0);
 
-    // WiFi: the assistant's own Material Symbols glyph (U+E63E), white when the
-    // hotspot is up and grey when it is off, drawn into the canvas so it goes
-    // through the same rotate+mirror transform as everything else.
-    lv_layer_t wifi_layer;
-    lv_canvas_init_layer(hud_canvas_, &wifi_layer);
-    lv_draw_label_dsc_t wifi_dsc;
-    lv_draw_label_dsc_init(&wifi_dsc);
-    wifi_dsc.color = hud_wifi_ ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x33333A);
-    wifi_dsc.font = &font_material_symbols_14_1;
-    wifi_dsc.text = "\xE6\x98\xBE";
-    lv_area_t wifi_area = {};
-    wifi_area.x1 = 12;
-    wifi_area.y1 = 83;
-    wifi_area.x2 = 27;
-    wifi_area.y2 = 98;
-    lv_draw_label(&wifi_layer, &wifi_dsc, &wifi_area);
-    lv_canvas_finish_layer(hud_canvas_, &wifi_layer);
+    // WiFi: only shown while the hotspot is actually up. The glyph is the
+    // assistant's own Material Symbols icon (U+E63E), drawn through the canvas
+    // so it shares the rotate+mirror transform with the rest of the HUD.
+    if (hud_wifi_) {
+        lv_layer_t wifi_layer;
+        lv_canvas_init_layer(hud_canvas_, &wifi_layer);
+        lv_draw_label_dsc_t wifi_dsc;
+        lv_draw_label_dsc_init(&wifi_dsc);
+        wifi_dsc.color = lv_color_hex(0xFFFFFF);
+        wifi_dsc.font = &font_material_symbols_14_1;
+        wifi_dsc.text = "\xE6\x98\xBE";
+        lv_area_t wifi_area = {};
+        wifi_area.x1 = 12;
+        wifi_area.y1 = 83;
+        wifi_area.x2 = 27;
+        wifi_area.y2 = 98;
+        lv_draw_label(&wifi_layer, &wifi_dsc, &wifi_area);
+        lv_canvas_finish_layer(hud_canvas_, &wifi_layer);
+    }
 
     // Rotate + mirror into the panel band, exactly like the face frames and the
     // configuration banner: dst_x = 127 - vy, dst_y = 39 - vx.
