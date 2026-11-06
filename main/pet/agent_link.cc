@@ -11,9 +11,14 @@
 #include <mbedtls/base64.h>
 #include <driver/usb_serial_jtag_vfs.h>
 #include <freertos/FreeRTOS.h>
+#include <driver/gpio.h>
+#include <esp_adc/adc_oneshot.h>
+#include <esp_adc/adc_cali.h>
+#include <esp_adc/adc_cali_scheme.h>
 #include <esp_log.h>
 
 #include "pet/pet_action.h"
+#include "pet/pet_battery.h"
 #include "pet/pet_audio.h"
 #include "pet/pet_core.h"
 #include "pet/pet_ears.h"
@@ -319,6 +324,18 @@ void AgentLink::HandleLine(char* line) {
         const bool night = cJSON_IsBool(on) ? cJSON_IsTrue(on) : true;
         core.SetNight(night);
         reply(StatusJson(core.status()));
+        return;
+    }
+
+    if (name == "pet.battery") {
+        // VBAT_ADC on GPIO1 (100K/100K divider), read through pet_battery.cc.
+        cJSON* result = cJSON_CreateObject();
+        const int millivolts = Battery::Get().Millivolts();
+        const int percent = Battery::Get().Percent();
+        cJSON_AddNumberToObject(result, "mv", millivolts);
+        cJSON_AddNumberToObject(result, "percent", percent);
+        cJSON_AddBoolToObject(result, "present", millivolts > 0);
+        reply(result);
         return;
     }
 

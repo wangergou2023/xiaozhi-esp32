@@ -1,6 +1,0 @@
-I (9546) wifi:station: 80:45:dd:72:0b:c8 join, AID=1, bgn, 40D
-I (9566) esp_netif_lwip: DHCP server assigned IP to a client, IP is: 192.168.4.2
-I (9566) PetGateway: A phone joined the hotspot; the three minute timer restarts
-I (9896) wifi:<ba-add>idx:2 (ifx:1, 80:45:dd:72:0b:c8), tid:0, ssn:16, winSize:64
-I (28906) PetEars: Sound: rms 776 (floor 142, trigger 4200)
-I (31756) PetEars: ear: rms 121 floor 139

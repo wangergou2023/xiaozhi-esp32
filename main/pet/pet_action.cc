@@ -75,10 +75,9 @@ constexpr int kHudH = 128;
 constexpr int kHudBand = 40;  // panel rows the HUD occupies after the transform
 
 const char* const kHeartRows[] = {
-    "...####...####...",
-    "..#####.#####....",
-    ".##############..",
-    "################.",
+    "..###......###...",
+    ".####....####....",
+    ".#############...",
     "################.",
     "################.",
     ".##############..",
@@ -89,7 +88,7 @@ const char* const kHeartRows[] = {
     "......####.......",
     ".......##........",
 };
-constexpr int kHeartRowsCount = 13;
+constexpr int kHeartRowsCount = 12;
 
 const char* const kPlugRows[] = {
     "....##..##....",
@@ -187,9 +186,10 @@ void Action::Attach(Display* display, Lamp* lamp, Backlight* backlight) {
     image_ = lv_animimg_create(lv_layer_top());
     lv_obj_remove_style_all(image_);
     lv_obj_set_size(image_, PET_FRAME_W, PET_FRAME_H);
-    // The face sits at the top of the square panel; the bottom 40 rows are the
-    // HUD band once the image is rotated by the beam splitter.
-    lv_obj_align(image_, LV_ALIGN_TOP_MID, 0, 0);
+    // The face sits at the bottom of the square panel, which puts it on the
+    // viewer's left once the beam splitter rotates the picture; the top 40 rows
+    // become the HUD strip on the viewer's right.
+    lv_obj_align(image_, LV_ALIGN_BOTTOM_MID, 0, 0);
 
     hud_canvas_buf_ = static_cast<uint8_t*>(heap_caps_malloc(kHudW * kHudH * 2, MALLOC_CAP_SPIRAM));
     hud_image_buf_ = static_cast<uint8_t*>(heap_caps_malloc(kHudW * kHudH * 2, MALLOC_CAP_SPIRAM));
@@ -208,7 +208,7 @@ void Action::Attach(Display* display, Lamp* lamp, Backlight* backlight) {
         hud_dsc_.data = hud_image_buf_;
         hud_image_ = lv_image_create(lv_layer_top());
         lv_image_set_src(hud_image_, &hud_dsc_);
-        lv_obj_align(hud_image_, LV_ALIGN_BOTTOM_MID, 0, 0);
+        lv_obj_align(hud_image_, LV_ALIGN_TOP_MID, 0, 0);
     } else {
         ESP_LOGW(TAG, "No PSRAM for the HUD strip");
     }
@@ -431,16 +431,17 @@ void Action::SetLedLevel(int percent, bool save) {
     PushColor(red_, green_, blue_, 1.0f);
 }
 
-void Action::SetHud(int affection, int hunger, bool wifi, bool usb) {
+void Action::SetHud(int affection, int hunger, bool wifi, bool usb, int battery_percent) {
     if (hud_canvas_ == nullptr) {
         return;
     }
     const int wifi_flag = wifi ? 1 : 0;
     const int usb_flag = usb ? 1 : 0;
     if (affection == hud_affection_ && hunger == hud_hunger_ && wifi_flag == hud_wifi_ &&
-        usb_flag == hud_usb_) {
+        usb_flag == hud_usb_ && battery_percent == hud_battery_) {
         return;
     }
+    hud_battery_ = battery_percent;
     hud_affection_ = affection;
     hud_hunger_ = hunger;
     hud_wifi_ = wifi_flag;
@@ -457,11 +458,11 @@ void Action::DrawHudLocked() {
     lv_canvas_fill_bg(hud_canvas_, lv_color_black(), LV_OPA_COVER);
 
     const lv_color_t heart_on = lv_color_hex(0xEB3C5A);
-    const lv_color_t heart_off = lv_color_hex(0x50202E);
+    const lv_color_t heart_off = lv_color_hex(0x692A38);
     DrawRows(hud_canvas_, 10, 4, kHeartRows, kHeartRowsCount, heart_on, heart_off, hud_affection_);
 
     const lv_color_t bowl_on = lv_color_hex(0xFFAA3C);
-    const lv_color_t bowl_off = lv_color_hex(0x50381A);
+    const lv_color_t bowl_off = lv_color_hex(0x694B20);
     DrawRows(hud_canvas_, 10, 26, kBowlRows, kBowlRowsCount, bowl_on, bowl_off, hud_hunger_);
 
     // USB: lit when a host is on the other end of the cable (docked or remote).
@@ -470,9 +471,11 @@ void Action::DrawHudLocked() {
     DrawRows(hud_canvas_, 12, 48, kPlugRows, kPlugRowsCount, hud_usb_ ? plug_on : plug_off,
              hud_usb_ ? plug_on : plug_off, 100);
 
-    // Battery: no sense hardware, so the outline stays dim and empty.
-    DrawRows(hud_canvas_, 12, 64, kBatteryRows, kBatteryRowsCount, lv_color_hex(0x3A3A40),
-             lv_color_hex(0x3A3A40), 0);
+    // Battery: filled by the real pack voltage (GPIO1 / VBAT_ADC). A negative
+    // value means no reading, and the outline stays dim.
+    const lv_color_t battery_on = hud_battery_ >= 0 ? lv_color_hex(0x9BE86E) : lv_color_hex(0x3A3A40);
+    DrawRows(hud_canvas_, 12, 64, kBatteryRows, kBatteryRowsCount, battery_on,
+             lv_color_hex(0x2A2A30), hud_battery_ >= 0 ? hud_battery_ : 0);
 
     // Four bars: the hotspot is either up or it is not, so they are dim or bright.
     const lv_color_t bar = hud_wifi_ ? lv_color_hex(0xC8C8D2) : lv_color_hex(0x33333A);

@@ -17,6 +17,7 @@
 #include "pet/agent_link.h"
 #include "pet/pet_action.h"
 #include "pet/pet_audio.h"
+#include "pet/pet_battery.h"
 #include "pet/pet_ears.h"
 #include "pet/pet_gateway.h"
 #include "pet/pet_behavior.h"
@@ -237,6 +238,7 @@ void Run() {
     }
     Action::Get().Attach(display, g_lamp, board.GetBacklight());
     PetAudio::Get().Start();
+    Battery::Get().Start();
     Ears::Get().Start();
     AgentLink::Get().Start(&Action::Get());
 
@@ -388,7 +390,8 @@ void Run() {
         }
         Action::Get().SetLedPattern(pattern);
         Action::Get().SetHud(static_cast<int>(status.affection), static_cast<int>(status.hunger),
-                             Gateway::Get().active(), status.mode != Mode::kAutonomous);
+                             Gateway::Get().active(), status.mode != Mode::kAutonomous,
+                             Battery::Get().Percent());
 
         // While a host owns the face it also owns the look; she keeps breathing.
         if (!AgentLink::Get().OwnsFace()) {

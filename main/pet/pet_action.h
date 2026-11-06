@@ -63,7 +63,7 @@ public:
     void SetColor(uint8_t red, uint8_t green, uint8_t blue);
     // The 40 px strip beside the face: heart = affection, bowl = hunger, bars =
     // the configuration hotspot being up. Redrawn only when a value changes.
-    void SetHud(int affection, int hunger, bool wifi, bool usb);
+    void SetHud(int affection, int hunger, bool wifi, bool usb, int battery_percent);
     // 0 turns the lamp off, 100 is full brightness. Saved in NVS unless told not to.
     void SetLedLevel(int percent, bool save = true);
     int led_level() const { return led_level_; }
@@ -91,6 +91,7 @@ private:
     int hud_hunger_ = -1;
     int hud_wifi_ = -1;
     int hud_usb_ = -1;
+    int hud_battery_ = -1;
     void DrawHudLocked();
     lv_obj_t* banner_canvas_ = nullptr;   // offscreen: text is drawn here
     lv_obj_t* banner_image_ = nullptr;    // rotated + mirrored copy on screen

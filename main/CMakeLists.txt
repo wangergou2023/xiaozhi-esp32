@@ -52,6 +52,7 @@ if(CONFIG_KITTY_PET_MODE)
         "pet/pet.cc"
         "pet/agent_link.cc"
         "pet/pet_action.cc"
+        "pet/pet_battery.cc"
         "pet/pet_audio.cc"
         "pet/pet_ears.cc"
         "pet/pet_gateway.cc"
@@ -1241,6 +1242,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_driver_i2c
                         esp_driver_i2s
                         esp_driver_ledc
+                        esp_adc
                         esp_driver_jpeg
                         esp_driver_ppa
                         esp_driver_tsens
