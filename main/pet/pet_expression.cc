@@ -45,9 +45,9 @@ Look LookForStatus(const Status& status) {
             look.frame_ms = 0;
             look.frame = 2;
             look.breath_px = 0.7f;
-            look.red = 0;
-            look.green = 0;
-            look.blue = 0;
+            look.red = 26;   // a faint ember, not a dead lamp
+            look.green = 12;
+            look.blue = 6;
             look.screen_level = 4;
             break;
         case Mood::kSleepy:

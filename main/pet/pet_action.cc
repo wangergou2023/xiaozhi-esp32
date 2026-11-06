@@ -321,10 +321,19 @@ void Action::SetLedLevel(int percent, bool save) {
         Settings("kitty", true).SetInt("led", led_level_);
     }
     led_dirty_ = true;
-    PushColor(1.0f);
+    PushColor(red_, green_, blue_, 1.0f);
 }
 
-void Action::PushColor(float factor) {
+void Action::Flash(uint8_t red, uint8_t green, uint8_t blue, int pulses, float seconds) {
+    flash_r_ = red;
+    flash_g_ = green;
+    flash_b_ = blue;
+    flash_pulses_ = pulses < 1 ? 1 : pulses;
+    flash_seconds_ = seconds < 0.1f ? 0.1f : seconds;
+    flash_left_ = flash_seconds_;
+}
+
+void Action::PushColor(uint8_t red, uint8_t green, uint8_t blue, float factor) {
     if (lamp_ == nullptr) {
         return;
     }
@@ -333,9 +342,9 @@ void Action::PushColor(float factor) {
         float scaled = static_cast<float>(value) * factor * dim;
         return static_cast<uint8_t>(scaled > 255.0f ? 255.0f : scaled);
     };
-    const uint8_t r = scale(red_);
-    const uint8_t g = scale(green_);
-    const uint8_t b = scale(blue_);
+    const uint8_t r = scale(red);
+    const uint8_t g = scale(green);
+    const uint8_t b = scale(blue);
     if (r == led_r_ && g == led_g_ && b == led_b_ && !led_dirty_) {
         return;
     }
@@ -377,12 +386,52 @@ void Action::Tick(float dt) {
     }
 
     led_phase_ += dt * 2.0f * kPi / kLedPeriod;
-    float pulse = 0.78f + 0.22f * (0.5f + 0.5f * sinf(led_phase_));
-    if (led_pattern_ == LedPattern::kFastBlink) {
-        // 4 Hz on/off: unmistakable "somebody is driving me" without a screen.
-        pulse = fmodf(led_phase_ / (2.0f * kPi) * kLedPeriod, 0.25f) < 0.125f ? 1.0f : 0.0f;
+    if (led_phase_ > 2.0f * kPi) {
+        led_phase_ -= 2.0f * kPi;
     }
-    PushColor(pulse);
+    led_slow_phase_ += dt * 2.0f * kPi / (kLedPeriod * 2.0f);
+    if (led_slow_phase_ > 2.0f * kPi) {
+        led_slow_phase_ -= 2.0f * kPi;
+    }
+
+    // A flash sits on top of the pattern: it borrows the lamp for a second, then
+    // the mood colour and breathing come back on their own.
+    if (flash_left_ > 0.0f) {
+        flash_left_ -= dt;
+        const float elapsed = flash_seconds_ - (flash_left_ > 0.0f ? flash_left_ : 0.0f);
+        const float window = flash_seconds_ / static_cast<float>(flash_pulses_);
+        const float inside = fmodf(elapsed, window);
+        const float pulse = inside < window * 0.55f ? 1.0f : 0.0f;
+        PushColor(flash_r_, flash_g_, flash_b_, pulse);
+        return;
+    }
+
+    const float cycle = led_phase_ / (2.0f * kPi) * kLedPeriod;
+    float pulse = 1.0f;
+    switch (led_pattern_) {
+        case LedPattern::kBreath:
+            pulse = 0.72f + 0.28f * (0.5f + 0.5f * sinf(led_phase_));
+            break;
+        case LedPattern::kSlowBreath:
+            pulse = 0.40f + 0.60f * (0.5f + 0.5f * sinf(led_slow_phase_));
+            break;
+        case LedPattern::kFastBlink:
+            // 4 Hz on/off: unmistakable "somebody is driving me" without a screen.
+            pulse = fmodf(cycle, 0.25f) < 0.125f ? 1.0f : 0.0f;
+            break;
+        case LedPattern::kDoubleBlink:
+            // Two quick pulses, then a pause: reads as "hey, over here".
+            pulse = (fmodf(cycle, 2.0f) < 0.09f || (fmodf(cycle, 2.0f) >= 0.18f &&
+                                                      fmodf(cycle, 2.0f) < 0.27f))
+                        ? 1.0f
+                        : 0.0f;
+            break;
+        case LedPattern::kSolid:
+        default:
+            pulse = 1.0f;
+            break;
+    }
+    PushColor(red_, green_, blue_, pulse);
 }
 
 }  // namespace kitty

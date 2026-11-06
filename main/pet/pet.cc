@@ -269,6 +269,7 @@ void Run() {
                 core.Poke();
                 core.NoteCalled();
                 PetAudio::Get().Play(Voice::kHappy);
+                Action::Get().Flash(255, 255, 255, 2, 0.8f);
                 ReactionLook(Clip::kWave, 110, 1.6f, core.status());
                 Action::Get().SetLook(0, -3);
                 AgentLink::Get().OnCalled();
@@ -348,8 +349,21 @@ void Run() {
             }
         }
 
-        Action::Get().SetLedPattern(AgentLink::Get().remote() ? Action::LedPattern::kFastBlink
-                                                         : Action::LedPattern::kSteady);
+        // Colour says how she feels (pet_expression.cc), rhythm says what is
+        // going on: fast blink = a host owns her, double blink = hungry,
+        // slow deep breathing = drowsy or lonely, plain breathing = fine.
+        Action::LedPattern pattern = Action::LedPattern::kBreath;
+        if (AgentLink::Get().remote()) {
+            pattern = Action::LedPattern::kFastBlink;
+        } else if (status.mood == Mood::kAsleep) {
+            pattern = Action::LedPattern::kSolid;  // asleep: the colour is already off
+        } else if (status.mood == Mood::kHungry) {
+            pattern = Action::LedPattern::kDoubleBlink;
+        } else if (status.mood == Mood::kLonely || status.mood == Mood::kTired ||
+                   status.mood == Mood::kSleepy) {
+            pattern = Action::LedPattern::kSlowBreath;
+        }
+        Action::Get().SetLedPattern(pattern);
 
         // While a host owns the face it also owns the look; she keeps breathing.
         if (!AgentLink::Get().OwnsFace()) {

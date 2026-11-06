@@ -44,10 +44,23 @@ public:
     void HideBanner();
     // How the LED behaves on top of its colour.
     enum class LedPattern : uint8_t {
-        kSteady,  // slow breathing, the idle look
-        kFastBlink,  // a host has taken over (docs/pet-manual.md §10)
+        kBreath,      // 3 s breathing, the idle look
+        kSlowBreath,  // 6 s deep breathing: drowsy, lonely, asleep
+        kFastBlink,   // 4 Hz, a host has taken over (docs/pet-manual.md §10)
+        kDoubleBlink, // two short pulses every 2 s: hungry, wants attention
+        kSolid,       // constant
     };
-    void SetLedPattern(LedPattern pattern) { led_pattern_ = pattern; }
+    void SetLedPattern(LedPattern pattern) {
+        if (led_pattern_ != pattern) {
+            led_pattern_ = pattern;
+            led_phase_ = 0.0f;
+            led_slow_phase_ = 0.0f;
+        }
+    }
+    // A short colour burst over the base colour: white for "heard my name",
+    // green for a finished task, red for a failed one.
+    void Flash(uint8_t red, uint8_t green, uint8_t blue, int pulses = 1,
+               float seconds = 0.9f);
     // LED colour, already dimmed by the caller.
     void SetColor(uint8_t red, uint8_t green, uint8_t blue);
     // 0 turns the lamp off, 100 is full brightness. Saved in NVS unless told not to.
@@ -58,7 +71,7 @@ public:
 
 private:
     void ApplyLocked(int clip_index, int frame_ms);
-    void PushColor(float factor);
+    void PushColor(uint8_t red, uint8_t green, uint8_t blue, float factor);
 
     Display* display_ = nullptr;
     Lamp* lamp_ = nullptr;
@@ -87,8 +100,13 @@ private:
     uint8_t led_r_ = 0, led_g_ = 0, led_b_ = 0;
     int led_level_ = 100;
     float led_phase_ = 0.0f;
+    float led_slow_phase_ = 0.0f;
+    float flash_left_ = 0.0f;
+    float flash_seconds_ = 0.9f;
+    int flash_pulses_ = 1;
+    uint8_t flash_r_ = 0, flash_g_ = 0, flash_b_ = 0;
     bool led_dirty_ = false;
-    LedPattern led_pattern_ = LedPattern::kSteady;
+    LedPattern led_pattern_ = LedPattern::kBreath;
 };
 
 }  // namespace kitty

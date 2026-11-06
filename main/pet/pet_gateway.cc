@@ -181,6 +181,7 @@ button{width:100%;padding:16px;border:0;border-radius:14px;background:var(--acce
  color:#191207;font:650 16px/1 inherit;letter-spacing:.3px;cursor:pointer}
 button:active{transform:scale(.995)}
 .foot{margin:2px 2px 10px;color:var(--muted);font-size:12px;line-height:1.5}
+.hint{margin:7px 2px 0;color:#6f6f77;font-size:12px;line-height:1.5}
 </style></head><body><div class="wrap">
 <h1>Kitty</h1>
 <p class="sub">改完点保存，热点会自己关掉。</p>
@@ -194,24 +195,28 @@ button:active{transform:scale(.995)}
                         "\" autocapitalize=\"off\" autocorrect=\"off\" spellcheck=\"false\">");
     html += Card("她是谁", basics);
 
-    std::string voice;
-    voice += "<div class=\"field\"><span>音量 <b id=\"volumeValue\">" + std::to_string(volume) +
+    std::string sound;
+    sound += "<div class=\"field\"><span>音量 <b id=\"volumeValue\">" + std::to_string(volume) +
              "</b></span><input id=\"volume\" name=\"volume\" type=\"range\" min=\"0\" max=\"100\" "
              "value=\"" + std::to_string(volume) + "\"></div>";
-    voice += "<div class=\"field\"><span>亮度 <b id=\"brightnessValue\">" +
-             std::to_string(brightness) + "</b></span><input id=\"brightness\" name=\"brightness\" "
-             "type=\"range\" min=\"5\" max=\"100\" value=\"" + std::to_string(brightness) + "\"></div>";
-    voice += "<div class=\"field\"><span>灯 <b id=\"ledValue\">" +
-             std::to_string(Action::Get().led_level()) +
-             "</b></span><input id=\"led\" name=\"led\" type=\"range\" min=\"0\" max=\"100\" "
-             "value=\"" + std::to_string(Action::Get().led_level()) + "\"></div>";
-    voice += Field("唤醒灵敏度",
+    sound += Field("唤醒灵敏度",
                    "<select name=\"wake_sensitivity\">" +
                        SelectOption(0, Ears::Get().sensitivity(), "低 · 环境安静") +
                        SelectOption(1, Ears::Get().sensitivity(), "中 · 日常") +
                        SelectOption(2, Ears::Get().sensitivity(), "高 · 小声也能叫醒") +
                        "</select>");
-    html += Card("声音与灯", voice);
+    html += Card("声音", sound);
+
+    std::string light;
+    light += "<div class=\"field\"><span>屏幕亮度 <b id=\"brightnessValue\">" +
+             std::to_string(brightness) + "</b></span><input id=\"brightness\" name=\"brightness\" "
+             "type=\"range\" min=\"5\" max=\"100\" value=\"" + std::to_string(brightness) + "\"></div>";
+    light += "<div class=\"field\"><span>指示灯亮度 <b id=\"ledValue\">" +
+             std::to_string(Action::Get().led_level()) +
+             "</b></span><input id=\"led\" name=\"led\" type=\"range\" min=\"0\" max=\"100\" "
+             "value=\"" + std::to_string(Action::Get().led_level()) + "\">"
+             "<p class=\"hint\">脸上那块屏 vs. 机身那颗小灯；两者互相独立，小灯调到 0 就是关掉。</p></div>";
+    html += Card("显示与灯", light);
 
     std::string character;
     character += Field("难度",

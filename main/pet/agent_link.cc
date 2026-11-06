@@ -482,9 +482,11 @@ void AgentLink::HandleLine(char* line) {
         const std::string outcome = cJSON_IsString(result) ? result->valuestring : "done";
         if (outcome == "error" || outcome == "failed" || outcome == "interrupted") {
             core.AgentTaskFailed();
+            action_->Flash(255, 40, 40, 2, 0.9f);  // red, twice: something went wrong
             ESP_LOGI(TAG, "Host task failed");
         } else {
             core.AgentTaskDone();
+            action_->Flash(40, 255, 90, 1, 0.8f);  // green: done
             ESP_LOGI(TAG, "Host finished a task");
         }
         reply(StatusJson(core.status()));
