@@ -133,14 +133,14 @@ main/boards/       只做接线与初始化，不含业务逻辑
 | `pet.look` | `dx`, `dy` | 眼球/头部偏移 | 同左 |
 | `pet.attention` | `on` | 抬头看用户 | 同左 |
 | `pet.feed` / `pet.clean` / `pet.play` | — | 单击/双击/三击手势 | agent 也可代劳（省事但有上限） |
-| `pet.status` | — | 返回全部数值与模式 | 同左 |
+| `pet.status` | — | 返回全部数值、模式、以及灯当前输出的 `led{r,g,b,level}` | 同左 |
 | `pet.poke` | 事件 | 按键/唤醒词触发 | 上报给 host |
 | `pet.sleep` / `pet.wake` | — | 精力见底 / 靠触摸 | agent 强制 |
 | `pet.night` | `on` | 作息时段或菜单 | agent 强制进入/退出夜间 |
 | `pet.task` | `ok` | — | agent 上报任务结果，换算成数值变化 |
 | `pet.time` | `epoch`, `tz_offset` | 配网页手动对时 | host 对时（更准，优先） |
 | `pet.volume` | `0–100` | 菜单 / 配网页 | host 调音量 |
-| `pet.config` | — | 菜单 | 让 host 打开配网页（方便测试） |
+| `pet.config` | `on` | 长按 BOOT（菜单尚未接入） | 让 host 打开/关闭配网热点；串口被占用时这是唯一办法 |
 | `pet.mic_stats` | — | — | 读麦克风电平与识别统计，调试用 |
 
 另有调试能力：`pet.say` 带 `test: true` 时把音频直接喂给命令模型而不播放，
@@ -828,7 +828,7 @@ Microsoft Huihui 是拼接式老语音，经 0.85 寸小喇叭糊成一片；换
 把设备协议包成 **MCP server**，让 agent 框架原生调用。
 
 - `scripts/pet_mcp.py`：stdio JSON-RPC，实现 `initialize` / `tools/list` / `tools/call`，
-  16 个工具一一对应 `pet.*` 原语；
+  17 个工具一一对应 `pet.*` 原语（含为 agent 补的 `pet.config`）；
 - `dsh/kitty-mcp/`：只有配置的 DSH bundle，把上面的 server 注册成
   `@deepseek-ai/dsh-mcp-client` 的一行配置（`transport: stdio`、`command`、`args`、`env`）。
 
@@ -892,3 +892,14 @@ Host: www.msftconnecttest.com    GET /connecttest.txt     -> 302
    现在每个 tick 由身体状态独立驱动：agent 借脸，不借整个身体。
 
 `pet.status` 里带 `led: {r,g,b,level}`，可以在没有摄像头的情况下确认灯的真实输出。
+
+### 配置页重做
+
+第一版是一列铺满整屏的控件：没有最大宽度、没有分组、滑块只有圆点、保存按钮在折叠线以下。
+现在是一列 460 px 的卡片（她是谁 / 声音 / 显示与灯 / 脾气 / 作息 / 时间），底部常驻保存条。
+
+验证方式值得记下来：把设备自己吐出的 HTML 存到本地，用无头 Edge 分别按手机和桌面宽度渲染成图，
+对着图改，比每次烧录四分钟去猜快得多。中途还澄清了一个假警报 —— 第一版截图看着像溢出被裁，
+其实是 headless 的视口（518 px）比截图（430 px）宽，布局本身没问题。
+
+灯亮度的迁移也在这批里：`led` 默认 0，旧固件存过 100 的用 `led_rev` 一次性清零。
