@@ -6,10 +6,10 @@
 #include "pet/lamp.h"
 #include "pet/pet_types.h"
 
+#include <lvgl.h>
+
 class Display;
 class Backlight;
-struct _lv_obj_t;
-typedef struct _lv_obj_t lv_obj_t;
 
 namespace kitty {
 
@@ -59,8 +59,11 @@ private:
     Lamp* lamp_ = nullptr;
     Backlight* backlight_ = nullptr;
     lv_obj_t* image_ = nullptr;
-    lv_obj_t* banner_ = nullptr;
-    lv_obj_t* banner_label_ = nullptr;
+    lv_obj_t* banner_canvas_ = nullptr;   // offscreen: text is drawn here
+    lv_obj_t* banner_image_ = nullptr;    // rotated + mirrored copy on screen
+    uint8_t* banner_canvas_buf_ = nullptr;
+    uint8_t* banner_image_buf_ = nullptr;
+    lv_image_dsc_t banner_dsc_ = {};
 
     int clip_ = -1;
     int frame_ms_ = 0;

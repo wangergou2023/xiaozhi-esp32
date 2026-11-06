@@ -753,6 +753,11 @@ Microsoft Huihui 是拼接式老语音，经 0.85 寸小喇叭糊成一片；换
 - `scripts/gen_pet_frames.py` 里 `MIRROR_X = True` 保证以后重新生成帧不会把这个镜像丢掉；
 - 实机确认：Kitty 的朝向由面向左变成面向右，用户验收通过。
 
+**LVGL 画的东西也要跟着变换。** 片上唯一会显示文字的场合是配网小黑板（SSID + 地址）。
+它现在先画到离屏 canvas，再把像素做和帧一样的变换（逆时针 90° + 水平镜像），最后以
+`lv_image` 贴到屏幕上 —— 直接放 `lv_label` 的话，字会是歪的而且是反的。
+变换映射：`dst_x = H-1-y`、`dst_y = W-1-x`，和 `gen_pet_frames.py` 的 PIL 处理（rotate 90 + FLIP_LEFT_RIGHT）逐像素等价。
+
 ### 接入 DSH（MCP）
 
 除了 `petctl.py`（一次调用一条请求）和 `pet_agent.py`（脚本跑全部原语），还有第三条路：

@@ -1,15 +1,1 @@
-I (16786) wifi:station: 80:45:dd:72:0b:c8 join, AID=1, bgn, 40D
-I (16806) esp_netif_lwip: DHCP server assigned IP to a client, IP is: 192.168.4.2
-I (17186) wifi:<ba-add>idx:2 (ifx:1, 80:45:dd:72:0b:c8), tid:0, ssn:18, winSize:64
-I (28776) AudioCodec: Set output volume to 80
-I (28786) PetCore: Sleep window 22:30 - 06:30
-I (28786) PetGateway: Settings saved
-I (30396) wifi:station: 80:45:dd:72:0b:c8 leave, AID = 1, reason = 2, bss_flags is 756835, bss:0x3fce0548
-I (30396) wifi:new:<6,0>, old:<6,2>, ap:<6,2>, sta:<255,255>, prof:6, snd_ch_cfg:0x0
-I (30396) wifi:<ba-del>idx:2, tid:0
-I (30396) wifi:new:<6,2>, old:<6,0>, ap:<6,2>, sta:<255,255>, prof:6, snd_ch_cfg:0x0
-I (30466) wifi:flush txq
-I (30466) wifi:stop sw txq
-I (30466) wifi:lmac stop hw txq
-I (30466) PetGateway: Configuration AP down
-I (31766) PetEars: ear: rms 118 floor 121
+I (31776) PetEars: ear: rms 117 floor 117

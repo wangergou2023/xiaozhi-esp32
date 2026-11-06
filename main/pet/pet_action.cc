@@ -167,41 +167,100 @@ void Action::Freeze(Clip clip, int frame) {
     frozen_frame_ = frame;
 }
 
+// The panel is viewed through a beam splitter: everything the eye sees is
+// rotated 90 degrees and mirrored. The animation frames are pre-transformed by
+// scripts/gen_pet_frames.py; anything LVGL draws has to get the same treatment,
+// which is why the banner goes through a canvas and a pixel transform instead of
+// straight onto the screen.
 void Action::ShowBanner(const char* line1, const char* line2) {
     if (!ready()) {
         return;
     }
-    char text[64] = {};
-    snprintf(text, sizeof(text), "%s\n%s", line1 != nullptr ? line1 : "",
-             line2 != nullptr ? line2 : "");
     DisplayLockGuard lock(display_);
     if (!lock) {
         return;
     }
-    if (banner_ == nullptr) {
-        banner_ = lv_obj_create(lv_layer_top());
-        lv_obj_remove_style_all(banner_);
-        lv_obj_set_size(banner_, PET_FRAME_W, 52);
-        lv_obj_align(banner_, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_set_style_bg_color(banner_, lv_color_black(), 0);
-        lv_obj_set_style_bg_opa(banner_, LV_OPA_80, 0);
-        banner_label_ = lv_label_create(banner_);
-        lv_obj_set_style_text_color(banner_label_, lv_color_white(), 0);
-        lv_obj_set_style_text_font(banner_label_, &lv_font_montserrat_14, 0);
-        lv_obj_set_style_text_align(banner_label_, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_align(banner_label_, LV_ALIGN_CENTER, 0, 0);
+
+    constexpr int kW = PET_FRAME_W;  // 128, as seen by the user
+    constexpr int kH = 52;
+
+    if (banner_canvas_ == nullptr) {
+        banner_canvas_buf_ = static_cast<uint8_t*>(
+            heap_caps_malloc(kW * kH * 2, MALLOC_CAP_SPIRAM));
+        banner_image_buf_ = static_cast<uint8_t*>(
+            heap_caps_malloc(kW * kH * 2, MALLOC_CAP_SPIRAM));
+        if (banner_canvas_buf_ == nullptr || banner_image_buf_ == nullptr) {
+            ESP_LOGE(TAG, "No PSRAM for the banner");
+            return;
+        }
+        banner_canvas_ = lv_canvas_create(lv_layer_top());
+        lv_canvas_set_buffer(banner_canvas_, banner_canvas_buf_, kW, kH,
+                             LV_COLOR_FORMAT_RGB565);
+        lv_obj_add_flag(banner_canvas_, LV_OBJ_FLAG_HIDDEN);
+
+        memset(&banner_dsc_, 0, sizeof(banner_dsc_));
+        banner_dsc_.header.magic = LV_IMAGE_HEADER_MAGIC;
+        banner_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
+        banner_dsc_.header.w = kH;  // rotated: 52 wide
+        banner_dsc_.header.h = kW;  // 128 tall
+        banner_dsc_.header.stride = kH * 2;
+        banner_dsc_.data_size = kW * kH * 2;
+        banner_dsc_.data = banner_image_buf_;
+        banner_image_ = lv_image_create(lv_layer_top());
+        lv_image_set_src(banner_image_, &banner_dsc_);
+        lv_obj_align(banner_image_, LV_ALIGN_CENTER, 0, 0);
     }
-    lv_label_set_text(banner_label_, text);
-    lv_obj_remove_flag(banner_, LV_OBJ_FLAG_HIDDEN);
+
+    lv_canvas_fill_bg(banner_canvas_, lv_color_black(), LV_OPA_COVER);
+    lv_layer_t layer;
+    lv_canvas_init_layer(banner_canvas_, &layer);
+
+    const lv_font_t* font = &lv_font_montserrat_14;
+    int y = 7;
+    for (const char* text : {line1, line2}) {
+        if (text == nullptr || text[0] == '\0') {
+            continue;
+        }
+        lv_point_t size = {};
+        lv_text_get_size(&size, text, font, 0, 0, kW, LV_TEXT_FLAG_NONE);
+        lv_draw_label_dsc_t dsc;
+        lv_draw_label_dsc_init(&dsc);
+        dsc.color = lv_color_white();
+        dsc.font = font;
+        dsc.text = text;
+        lv_area_t area = {};
+        area.x1 = (kW - size.x) / 2;
+        area.y1 = y;
+        area.x2 = area.x1 + size.x;
+        area.y2 = y + size.y;
+        lv_draw_label(&layer, &dsc, &area);
+        y += size.y + 2;
+    }
+    lv_canvas_finish_layer(banner_canvas_, &layer);
+
+    // Same transform the frame generator applies: rotate counter-clockwise 90
+    // degrees, then mirror left-right.
+    const auto* src = reinterpret_cast<const uint16_t*>(banner_canvas_buf_);
+    auto* dst = reinterpret_cast<uint16_t*>(banner_image_buf_);
+    for (int sy = 0; sy < kH; sy++) {
+        for (int sx = 0; sx < kW; sx++) {
+            const int dx = kH - 1 - sy;
+            const int dy = kW - 1 - sx;
+            dst[dy * kH + dx] = src[sy * kW + sx];
+        }
+    }
+
+    lv_obj_invalidate(banner_image_);
+    lv_obj_remove_flag(banner_image_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void Action::HideBanner() {
-    if (banner_ == nullptr || display_ == nullptr) {
+    if (banner_image_ == nullptr || display_ == nullptr) {
         return;
     }
     DisplayLockGuard lock(display_);
     if (lock) {
-        lv_obj_add_flag(banner_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(banner_image_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
