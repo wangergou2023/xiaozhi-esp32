@@ -482,6 +482,9 @@ bool Gateway::Start() {
     catch_all.user_ctx = this;
     httpd_register_uri_handler(server, &catch_all);
 
+    esp_event_handler_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED,
+                               &Gateway::OnStationJoined, this);
+
     server_ = server;
     dns_running_ = true;
     xTaskCreate(DnsTask, "pet_dns", 4096, this, 2, (TaskHandle_t*)&dns_task_);
@@ -501,6 +504,8 @@ void Gateway::Stop() {
     }
     dns_running_ = false;
     dns_task_ = nullptr;
+    esp_event_handler_unregister(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED,
+                                 &Gateway::OnStationJoined);
     esp_wifi_stop();
     active_ = false;
     ESP_LOGI(TAG, "Configuration AP down");
@@ -522,6 +527,17 @@ void Gateway::Tick(float dt) {
         ESP_LOGI(TAG, "Nobody configured anything for three minutes");
         Stop();
     }
+}
+
+void Gateway::OnStationJoined(void* arg, esp_event_base_t base, int32_t id, void* data) {
+    (void)base;
+    (void)id;
+    (void)data;
+    auto* gateway = static_cast<Gateway*>(arg);
+    if (gateway != nullptr) {
+        gateway->Touch();
+    }
+    ESP_LOGI(TAG, "A phone joined the hotspot; the three minute timer restarts");
 }
 
 void Gateway::Touch() {

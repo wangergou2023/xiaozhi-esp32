@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include <esp_event.h>
+
 namespace kitty {
 
 // The configuration doorway from docs/pet-design.md §11: a short-lived SoftAP
@@ -30,6 +32,9 @@ public:
 
     // Called by the HTTP handlers.
     void ApplyForm(const std::string& body);
+    // A station finished associating: restart the idle timer so the radio does
+    // not switch off under a phone that is still opening the captive portal.
+    static void OnStationJoined(void* arg, esp_event_base_t base, int32_t id, void* data);
     // Any request counts as activity; the three minute timer restarts.
     void Touch();
     void ScheduleStop(float seconds);
