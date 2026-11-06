@@ -129,7 +129,7 @@ void HandleGesture(Gesture gesture) {
                 Gateway::Get().Stop();
                 g_action.HideBanner();
             } else if (Gateway::Get().Start()) {
-                g_action.ShowBanner(Gateway::Get().ssid().c_str(), "192.168.4.1");
+                g_action.ShowBanner(Gateway::Get().ssid().c_str(), Gateway::Get().password());
                 PetAudio::Get().Play(Voice::kHappy);
             } else {
                 PetAudio::Get().Play(Voice::kSigh);

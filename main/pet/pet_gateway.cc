@@ -110,6 +110,16 @@ std::string SelectOption(int value, int current, const char* label) {
     return option;
 }
 
+std::string Field(const char* label, const std::string& input) {
+    return "<div class=\"field\"><span>" + std::string(label) + "</span>" + input + "</div>";
+}
+
+// One card, one topic. Cards keep the page from turning into one long column on
+// a desktop screen and give the eye a place to land.
+std::string Card(const char* title, const std::string& body) {
+    return "<section class=\"card\"><h2>" + std::string(title) + "</h2>" + body + "</section>";
+}
+
 std::string Page() {
     auto& core = PetCore::Get();
     const int start = core.sleep_start_minute();
@@ -120,66 +130,136 @@ std::string Page() {
     snprintf(sleep_end, sizeof(sleep_end), "%02d:%02d", end / 60, end % 60);
 
     const int volume = PetAudio::Get().volume();
-    const int difficulty = core.difficulty();
     int brightness = 75;
     if (auto* backlight = Board::GetInstance().GetBacklight()) {
         brightness = backlight->brightness();
     }
 
     std::string html;
-    html.reserve(4096);
-    html +=
-        "<!doctype html><html><head><meta charset=\"utf-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-        "<title>Kitty</title><style>"
-        "body{background:#141414;color:#eee;font-family:system-ui;margin:0;padding:24px}"
-        "h1{font-size:20px;font-weight:600;margin:0 0 4px}"
-        "p.hint{color:#888;font-size:13px;margin:0 0 20px}"
-        "label{display:block;margin:16px 0 6px;font-size:14px;color:#bbb}"
-        "input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;"
-        "border:1px solid #333;background:#1e1e1e;color:#eee;font-size:16px}"
-        "button{margin-top:24px;width:100%;padding:14px;border:0;border-radius:10px;"
-        "background:#ffb26b;color:#1a1a1a;font-size:16px;font-weight:600}"
-        "</style></head><body><h1>Kitty</h1>"
-        "<p class=\"hint\">改完点保存，热点会自己关掉。</p><form method=\"post\" action=\"/save\">";
+    html.reserve(6144);
+    html += R"HTML(<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Kitty</title><style>
+:root{--bg:#0b0b0c;--card:#141417;--line:#26262b;--fg:#e9e7e4;--muted:#93939b;--accent:#ffb26b}
+*{box-sizing:border-box}
+html,body{max-width:100%;overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--fg);
+ font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:460px;margin:0 auto;padding:20px 14px 8px}
+h1{margin:0;font-size:22px;font-weight:650;letter-spacing:.3px}
+.sub{margin:4px 0 18px;color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+ padding:15px 14px 1px;margin-bottom:12px}
+.card h2{margin:0 0 13px;font-size:11px;font-weight:600;letter-spacing:.16em;
+ text-transform:uppercase;color:var(--muted)}
+.field{margin-bottom:15px}
+.field>span{display:flex;justify-content:space-between;align-items:baseline;
+ font-size:13px;color:var(--muted);margin-bottom:7px}
+.field>span b{color:var(--accent);font-weight:650;font-variant-numeric:tabular-nums}
+input,select{width:100%;min-width:0;padding:12px;border:1px solid var(--line);border-radius:12px;
+ background:#1a1a1f;color:var(--fg);font:inherit;font-size:16px;appearance:none;
+ -webkit-appearance:none;transition:border-color .15s}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),
+ linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+ background-position:calc(100% - 19px) 54%,calc(100% - 14px) 54%;
+ background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:38px}
+input[type=range]{-webkit-appearance:none;appearance:none;padding:0;background:none;border:0;height:32px}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:#2b2b31}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-8px;
+ border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px rgba(255,178,107,.14)}
+input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:#2b2b31}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:var(--accent)}
+.row{display:flex;gap:10px}
+.row .field{flex:1;min-width:0}
+.bar{position:sticky;bottom:0;margin-top:-8px;padding:18px 0 calc(18px + env(safe-area-inset-bottom));
+ background:linear-gradient(180deg,rgba(11,11,12,0) 0,rgba(11,11,12,.92) 34%,var(--bg) 100%)}
+button{width:100%;padding:16px;border:0;border-radius:14px;background:var(--accent);
+ color:#191207;font:650 16px/1 inherit;letter-spacing:.3px;cursor:pointer}
+button:active{transform:scale(.995)}
+.foot{margin:2px 2px 10px;color:var(--muted);font-size:12px;line-height:1.5}
+</style></head><body><div class="wrap">
+<h1>Kitty</h1>
+<p class="sub">改完点保存，热点会自己关掉。</p>
+<form method="post" action="/save">
+)HTML";
 
-    html += "<label>名字</label><input name=\"name\" value=\"" + Escape(core.name()) + "\">";
-    html += "<label>音量 " + std::to_string(volume) + "</label>"
-            "<input name=\"volume\" type=\"range\" min=\"0\" max=\"100\" value=\"" +
-            std::to_string(volume) + "\">";
-    html += "<label>亮度</label><input name=\"brightness\" type=\"range\" min=\"5\" max=\"100\" value=\"" +
-            std::to_string(brightness) + "\">";
-    html += "<label>难度</label><select name=\"difficulty\">" +
-            SelectOption(0, difficulty, "轻松") + SelectOption(1, difficulty, "正常") +
-            SelectOption(2, difficulty, "硬核") + "</select>";
-    html += "<label>性格</label><select name=\"personality\">" +
-            SelectOption(0, core.personality(), "黏人") + SelectOption(1, core.personality(), "标准") +
-            SelectOption(2, core.personality(), "冷淡") + SelectOption(3, core.personality(), "活泼") +
-            "</select>";
-    html += "<label>作息：几点睡</label><input name=\"sleep_start\" type=\"time\" value=\"" +
-            std::string(sleep_start) + "\">";
-    html += "<label>作息：几点起</label><input name=\"sleep_end\" type=\"time\" value=\"" +
-            std::string(sleep_end) + "\">";
-    html += "<label>唤醒词（拼音，例如 xiao mi）</label><input name=\"wake_phrase\" value=\"" +
-            Escape(Ears::Get().phrase()) + "\">";
-    html += "<label>唤醒灵敏度</label><select name=\"wake_sensitivity\">" +
-            SelectOption(0, Ears::Get().sensitivity(), "低") +
-            SelectOption(1, Ears::Get().sensitivity(), "中") +
-            SelectOption(2, Ears::Get().sensitivity(), "高") + "</select>";
-    html += "<label>对时（留空就不改）</label>"
-            "<input name=\"clock\" type=\"datetime-local\">";
-    html += "<button type=\"submit\">保存</button></form></body></html>";
+    std::string basics;
+    basics += Field("名字", "<input name=\"name\" value=\"" + Escape(core.name()) + "\">");
+    basics += Field("唤醒词（拼音）",
+                    "<input name=\"wake_phrase\" value=\"" + Escape(Ears::Get().phrase()) +
+                        "\" autocapitalize=\"off\" autocorrect=\"off\" spellcheck=\"false\">");
+    html += Card("她是谁", basics);
+
+    std::string voice;
+    voice += "<div class=\"field\"><span>音量 <b id=\"volumeValue\">" + std::to_string(volume) +
+             "</b></span><input id=\"volume\" name=\"volume\" type=\"range\" min=\"0\" max=\"100\" "
+             "value=\"" + std::to_string(volume) + "\"></div>";
+    voice += "<div class=\"field\"><span>亮度 <b id=\"brightnessValue\">" +
+             std::to_string(brightness) + "</b></span><input id=\"brightness\" name=\"brightness\" "
+             "type=\"range\" min=\"5\" max=\"100\" value=\"" + std::to_string(brightness) + "\"></div>";
+    voice += Field("唤醒灵敏度",
+                   "<select name=\"wake_sensitivity\">" +
+                       SelectOption(0, Ears::Get().sensitivity(), "低 · 环境安静") +
+                       SelectOption(1, Ears::Get().sensitivity(), "中 · 日常") +
+                       SelectOption(2, Ears::Get().sensitivity(), "高 · 小声也能叫醒") +
+                       "</select>");
+    html += Card("声音与灯", voice);
+
+    std::string character;
+    character += Field("难度",
+                       "<select name=\"difficulty\">" +
+                           SelectOption(0, core.difficulty(), "轻松 · 掉得慢") +
+                           SelectOption(1, core.difficulty(), "正常") +
+                           SelectOption(2, core.difficulty(), "硬核 · 掉得快") + "</select>");
+    character += Field("性格",
+                       "<select name=\"personality\">" +
+                           SelectOption(0, core.personality(), "黏人 · 总来找你") +
+                           SelectOption(1, core.personality(), "标准") +
+                           SelectOption(2, core.personality(), "冷淡 · 自己待着") +
+                           SelectOption(3, core.personality(), "活泼 · 闲不住") + "</select>");
+    html += Card("脾气", character);
+
+    std::string routine;
+    routine += "<div class=\"row\">";
+    routine += Field("几点睡", "<input name=\"sleep_start\" type=\"time\" value=\"" +
+                                   std::string(sleep_start) + "\">");
+    routine += Field("几点起", "<input name=\"sleep_end\" type=\"time\" value=\"" +
+                                   std::string(sleep_end) + "\">");
+    routine += "</div>";
+    html += Card("作息", routine);
+
+    std::string clock;
+    clock += Field("对时", "<input name=\"clock\" type=\"datetime-local\">");
+    html += Card("时间", clock);
+
+    html += R"HTML(<div class="bar"><button type="submit">保存并关闭热点</button>
+<p class="foot">只在这里改参数；她不联网，热点只是短命的设置通道。</p></div>
+</form></div><script>
+for (const id of ['volume','brightness']) {
+  const input = document.getElementById(id);
+  const out = document.getElementById(id + 'Value');
+  if (input && out) input.addEventListener('input', () => { out.textContent = input.value; });
+}
+</script></body></html>)HTML";
     return html;
 }
 
 std::string SavedPage() {
-    return "<!doctype html><html><head><meta charset=\"utf-8\">"
-           "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-           "<title>Kitty</title><style>"
-           "body{background:#141414;color:#eee;font-family:system-ui;padding:48px 24px;text-align:center}"
-           "h1{font-size:20px;font-weight:600}"
-           "</style></head><body><h1>已保存</h1>"
-           "<p>热点马上关闭，她继续过日子。</p></body></html>";
+    return R"HTML(<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark"><title>Kitty</title><style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0b0c;color:#e9e7e4;
+ font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;text-align:center}
+.box{padding:28px}
+.mark{width:52px;height:52px;margin:0 auto 16px;border-radius:50%;background:#ffb26b;color:#191207;
+ display:grid;place-items:center;font-size:26px;font-weight:700}
+h1{margin:0 0 6px;font-size:19px;font-weight:650}
+p{margin:0;color:#93939b;font-size:13px}
+</style></head><body><div class="box"><div class="mark">✓</div>
+<h1>已保存</h1><p>热点马上关闭，她继续过日子。</p></div></body></html>)HTML";
 }
 
 esp_err_t RootHandler(httpd_req_t* request) {
@@ -309,6 +389,10 @@ void DnsTask(void* arg) {
 Gateway& Gateway::Get() {
     static Gateway instance;
     return instance;
+}
+
+const char* Gateway::password() const {
+    return kApPassword;
 }
 
 bool Gateway::Start() {

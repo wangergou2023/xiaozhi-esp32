@@ -1,2 +1,2 @@
 {'jsonrpc': '2.0', 'id': 1, 'result': {'ok': True, 'ssid': 'Kitty-6319', 'url': 'http://192.168.4.1/'}}
-captured 43 bytes
+captured 42 bytes

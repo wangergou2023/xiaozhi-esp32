@@ -23,6 +23,9 @@ public:
     void Tick(float dt);
 
     const std::string& ssid() const { return ssid_; }
+    // The page pops up by itself now, so the screen shows the password instead
+    // of an address nobody has to type.
+    const char* password() const;
     bool dns_running() const { return dns_running_; }
 
     // Called by the HTTP handlers.
