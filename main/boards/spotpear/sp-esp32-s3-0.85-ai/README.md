@@ -38,6 +38,9 @@ cuts board power, pressing it again restores it, so the pin never reads as a but
 
 The 57 frames live in `main/pet/assets/pet_frames.bin` and are embedded with
 `EMBED_FILES`; see `docs/pet-design.md` for what the design does with them.
+`scripts/gen_pet_frames.py` regenerates the blob from the codex-pet spritesheet.
+The shipped frames are **mirrored** (`MIRROR_X = True`): the picture the user sees
+is a reflection, so the frames are flipped to compensate.
 
 ## Console
 
