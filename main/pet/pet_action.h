@@ -17,6 +17,8 @@ namespace kitty {
 // backlight. Everything above it speaks in clips, colours and levels.
 class Action {
 public:
+    static Action& Get();
+
     // Shrink the face vertically by ~10% to read as a blink. The art has no
     // eyelid frames, so this is the closest honest option.
     static constexpr int32_t kEyesOpen = 256;
@@ -48,6 +50,9 @@ public:
     void SetLedPattern(LedPattern pattern) { led_pattern_ = pattern; }
     // LED colour, already dimmed by the caller.
     void SetColor(uint8_t red, uint8_t green, uint8_t blue);
+    // 0 turns the lamp off, 100 is full brightness. Saved in NVS unless told not to.
+    void SetLedLevel(int percent, bool save = true);
+    int led_level() const { return led_level_; }
     // Advance the idle motion (breathing, blink, LED pulse). dt in seconds.
     void Tick(float dt);
 
@@ -80,6 +85,7 @@ private:
     uint8_t level_ = 0;       // cached backlight level
     uint8_t red_ = 0, green_ = 0, blue_ = 0;
     uint8_t led_r_ = 0, led_g_ = 0, led_b_ = 0;
+    int led_level_ = 100;
     float led_phase_ = 0.0f;
     bool led_dirty_ = false;
     LedPattern led_pattern_ = LedPattern::kSteady;

@@ -14,6 +14,7 @@
 #include <lwip/inet.h>
 
 #include "board.h"
+#include "pet/pet_action.h"
 #include "pet/pet_audio.h"
 #include "pet/pet_ears.h"
 #include "pet/pet_core.h"
@@ -200,6 +201,10 @@ button:active{transform:scale(.995)}
     voice += "<div class=\"field\"><span>亮度 <b id=\"brightnessValue\">" +
              std::to_string(brightness) + "</b></span><input id=\"brightness\" name=\"brightness\" "
              "type=\"range\" min=\"5\" max=\"100\" value=\"" + std::to_string(brightness) + "\"></div>";
+    voice += "<div class=\"field\"><span>灯 <b id=\"ledValue\">" +
+             std::to_string(Action::Get().led_level()) +
+             "</b></span><input id=\"led\" name=\"led\" type=\"range\" min=\"0\" max=\"100\" "
+             "value=\"" + std::to_string(Action::Get().led_level()) + "\"></div>";
     voice += Field("唤醒灵敏度",
                    "<select name=\"wake_sensitivity\">" +
                        SelectOption(0, Ears::Get().sensitivity(), "低 · 环境安静") +
@@ -238,7 +243,7 @@ button:active{transform:scale(.995)}
     html += R"HTML(<div class="bar"><button type="submit">保存并关闭热点</button>
 <p class="foot">只在这里改参数；她不联网，热点只是短暂的设置通道。</p></div>
 </form></div><script>
-for (const id of ['volume','brightness']) {
+for (const id of ['volume','brightness','led']) {
   const input = document.getElementById(id);
   const out = document.getElementById(id + 'Value');
   if (input && out) input.addEventListener('input', () => { out.textContent = input.value; });
@@ -566,6 +571,11 @@ void Gateway::ApplyForm(const std::string& body) {
         if (auto* backlight = Board::GetInstance().GetBacklight()) {
             backlight->SetBrightness(static_cast<uint8_t>(atoi(brightness.c_str())), true);
         }
+    }
+
+    const std::string led = FormField(body, "led");
+    if (!led.empty()) {
+        Action::Get().SetLedLevel(atoi(led.c_str()));
     }
 
     const std::string difficulty = FormField(body, "difficulty");

@@ -11,6 +11,8 @@
 #include <lvgl.h>
 
 #include "backlight.h"
+#include "board.h"
+#include "settings.h"
 #include "display/display.h"
 #include "pet/assets/pet_frames.h"
 
@@ -70,10 +72,21 @@ bool LoadFrames() {
 
 }  // namespace
 
+Action& Action::Get() {
+    static Action instance;
+    return instance;
+}
+
 void Action::Attach(Display* display, Lamp* lamp, Backlight* backlight) {
     display_ = display;
     lamp_ = lamp;
     backlight_ = backlight;
+    led_level_ = Settings("kitty", false).GetInt("led", 100);
+    if (led_level_ < 0) {
+        led_level_ = 0;
+    } else if (led_level_ > 100) {
+        led_level_ = 100;
+    }
 
     if (display_ == nullptr) {
         ESP_LOGW(TAG, "No display: the pet will run blind");
@@ -297,12 +310,27 @@ void Action::SetColor(uint8_t red, uint8_t green, uint8_t blue) {
     led_dirty_ = true;
 }
 
+void Action::SetLedLevel(int percent, bool save) {
+    if (percent < 0) {
+        percent = 0;
+    } else if (percent > 100) {
+        percent = 100;
+    }
+    led_level_ = percent;
+    if (save) {
+        Settings("kitty", true).SetInt("led", led_level_);
+    }
+    led_dirty_ = true;
+    PushColor(1.0f);
+}
+
 void Action::PushColor(float factor) {
     if (lamp_ == nullptr) {
         return;
     }
-    const auto scale = [factor](uint8_t value) {
-        float scaled = static_cast<float>(value) * factor;
+    const float dim = static_cast<float>(led_level_) / 100.0f;
+    const auto scale = [factor, dim](uint8_t value) {
+        float scaled = static_cast<float>(value) * factor * dim;
         return static_cast<uint8_t>(scaled > 255.0f ? 255.0f : scaled);
     };
     const uint8_t r = scale(red_);

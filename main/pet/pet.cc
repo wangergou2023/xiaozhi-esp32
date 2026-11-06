@@ -32,7 +32,6 @@ constexpr float kUsbPollSeconds = 5.0f;
 Lamp* g_lamp = nullptr;
 QueueHandle_t g_gestures = nullptr;
 
-Action g_action;
 Behavior g_behavior;
 bool g_night = false;
 
@@ -127,9 +126,9 @@ void HandleGesture(Gesture gesture) {
             // Long press opens the configuration hotspot (docs/pet-design.md §11).
             if (Gateway::Get().active()) {
                 Gateway::Get().Stop();
-                g_action.HideBanner();
+                Action::Get().HideBanner();
             } else if (Gateway::Get().Start()) {
-                g_action.ShowBanner(Gateway::Get().ssid().c_str(), Gateway::Get().password());
+                Action::Get().ShowBanner(Gateway::Get().ssid().c_str(), Gateway::Get().password());
                 PetAudio::Get().Play(Voice::kHappy);
             } else {
                 PetAudio::Get().Play(Voice::kSigh);
@@ -170,13 +169,13 @@ void DrainGestures() {
 
 void ApplyLook(const Look& look) {
     if (look.frame_ms == 0) {
-        g_action.Freeze(look.clip, look.frame);
+        Action::Get().Freeze(look.clip, look.frame);
     } else {
-        g_action.Play(look.clip, look.frame_ms);
+        Action::Get().Play(look.clip, look.frame_ms);
     }
-    g_action.SetBreathing(look.breath_px);
-    g_action.SetScreenLevel(look.screen_level);
-    g_action.SetColor(look.red, look.green, look.blue);
+    Action::Get().SetBreathing(look.breath_px);
+    Action::Get().SetScreenLevel(look.screen_level);
+    Action::Get().SetColor(look.red, look.green, look.blue);
 }
 
 // Personality only changes how often she does something on her own.
@@ -219,10 +218,10 @@ void Run() {
     if (display != nullptr) {
         display->SetupUI();
     }
-    g_action.Attach(display, g_lamp, board.GetBacklight());
+    Action::Get().Attach(display, g_lamp, board.GetBacklight());
     PetAudio::Get().Start();
     Ears::Get().Start();
-    AgentLink::Get().Start(&g_action);
+    AgentLink::Get().Start(&Action::Get());
 
     nvs_stats_t nvs_stats = {};
     if (nvs_get_stats(nullptr, &nvs_stats) == ESP_OK) {
@@ -271,7 +270,7 @@ void Run() {
                 core.NoteCalled();
                 PetAudio::Get().Play(Voice::kHappy);
                 ReactionLook(Clip::kWave, 110, 1.6f, core.status());
-                g_action.SetLook(0, -3);
+                Action::Get().SetLook(0, -3);
                 AgentLink::Get().OnCalled();
                 break;
             }
@@ -287,7 +286,7 @@ void Run() {
 
         Gateway::Get().Tick(dt);
         if (!Gateway::Get().active()) {
-            g_action.HideBanner();
+            Action::Get().HideBanner();
         }
         g_behavior.SetTempo(TempoFor(core.personality()));
 
@@ -349,14 +348,14 @@ void Run() {
             }
         }
 
-        g_action.SetLedPattern(AgentLink::Get().remote() ? Action::LedPattern::kFastBlink
+        Action::Get().SetLedPattern(AgentLink::Get().remote() ? Action::LedPattern::kFastBlink
                                                          : Action::LedPattern::kSteady);
 
         // While a host owns the face it also owns the look; she keeps breathing.
         if (!AgentLink::Get().OwnsFace()) {
             ApplyLook(look);
         }
-        g_action.Tick(dt);
+        Action::Get().Tick(dt);
     }
 }
 

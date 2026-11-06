@@ -280,7 +280,8 @@ WiFi 在本设计中**只是配网射频**，不是联网能力。
 | 参数 | 说明 |
 | --- | --- |
 | `name` | 宠物名字（用于唤醒词与界面） |
-| `volume` / `brightness` | 音量、亮度 |
+| `volume` / `brightness` | 音量、屏幕亮度 |
+| `led` | 灯的亮度 0–100（0 = 关灯），乘在情绪配色上，NVS 保存 |
 | `wake_phrase` | 唤醒词，拼音注册（默认 `ni hao xiao mi`） |
 | `wake_sensitivity` | 唤醒词灵敏度：低 / 中 / 高（对应 MultiNet 阈值） |
 | `sleep_window` | 作息时段（依赖时间源） |
