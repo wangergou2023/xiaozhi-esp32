@@ -830,6 +830,9 @@ Microsoft Huihui 是拼接式老语音，经 0.85 寸小喇叭糊成一片；换
 **LVGL 画的东西也要跟着变换。** 片上唯一会显示文字的场合是配网小黑板（SSID + 地址）。
 它现在先画到离屏 canvas，再把像素做和帧一样的变换（逆时针 90° + 水平镜像），最后以
 `lv_image` 贴到屏幕上 —— 直接放 `lv_label` 的话，字会是歪的而且是反的。
+
+canvas 用 **ARGB8888**、背景全透明：字之间的像素带 alpha=0，所以脸会透过来，
+不再是一块黑底盖住她；白字底下垫了一层 1 px 黑阴影，保证在浅色的 Kitty 脸上也读得清。
 变换映射：`dst_x = H-1-y`、`dst_y = W-1-x`，和 `gen_pet_frames.py` 的 PIL 处理（rotate 90 + FLIP_LEFT_RIGHT）逐像素等价。
 
 ### 接入 DSH（MCP）

@@ -307,33 +307,35 @@ void Action::ShowBanner(const char* line1, const char* line2) {
     constexpr int kH = 52;
 
     if (banner_canvas_ == nullptr) {
+        // ARGB8888 so the pixels between the letters are actually transparent
+        // and the face shows through instead of a black slab.
         banner_canvas_buf_ = static_cast<uint8_t*>(
-            heap_caps_malloc(kW * kH * 2, MALLOC_CAP_SPIRAM));
+            heap_caps_malloc(kW * kH * 4, MALLOC_CAP_SPIRAM));
         banner_image_buf_ = static_cast<uint8_t*>(
-            heap_caps_malloc(kW * kH * 2, MALLOC_CAP_SPIRAM));
+            heap_caps_malloc(kW * kH * 4, MALLOC_CAP_SPIRAM));
         if (banner_canvas_buf_ == nullptr || banner_image_buf_ == nullptr) {
             ESP_LOGE(TAG, "No PSRAM for the banner");
             return;
         }
         banner_canvas_ = lv_canvas_create(lv_layer_top());
         lv_canvas_set_buffer(banner_canvas_, banner_canvas_buf_, kW, kH,
-                             LV_COLOR_FORMAT_RGB565);
+                             LV_COLOR_FORMAT_ARGB8888);
         lv_obj_add_flag(banner_canvas_, LV_OBJ_FLAG_HIDDEN);
 
         memset(&banner_dsc_, 0, sizeof(banner_dsc_));
         banner_dsc_.header.magic = LV_IMAGE_HEADER_MAGIC;
-        banner_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
+        banner_dsc_.header.cf = LV_COLOR_FORMAT_ARGB8888;
         banner_dsc_.header.w = kH;  // rotated: 52 wide
         banner_dsc_.header.h = kW;  // 128 tall
-        banner_dsc_.header.stride = kH * 2;
-        banner_dsc_.data_size = kW * kH * 2;
+        banner_dsc_.header.stride = kH * 4;
+        banner_dsc_.data_size = kW * kH * 4;
         banner_dsc_.data = banner_image_buf_;
         banner_image_ = lv_image_create(lv_layer_top());
         lv_image_set_src(banner_image_, &banner_dsc_);
         lv_obj_align(banner_image_, LV_ALIGN_CENTER, 0, 0);
     }
 
-    lv_canvas_fill_bg(banner_canvas_, lv_color_black(), LV_OPA_COVER);
+    lv_canvas_fill_bg(banner_canvas_, lv_color_black(), LV_OPA_TRANSP);
     lv_layer_t layer;
     lv_canvas_init_layer(banner_canvas_, &layer);
 
@@ -345,25 +347,42 @@ void Action::ShowBanner(const char* line1, const char* line2) {
         }
         lv_point_t size = {};
         lv_text_get_size(&size, text, font, 0, 0, kW, LV_TEXT_FLAG_NONE);
-        lv_draw_label_dsc_t dsc;
-        lv_draw_label_dsc_init(&dsc);
-        dsc.color = lv_color_white();
-        dsc.font = font;
-        dsc.text = text;
         lv_area_t area = {};
         area.x1 = (kW - size.x) / 2;
         area.y1 = y;
         area.x2 = area.x1 + size.x;
         area.y2 = y + size.y;
+
+        lv_draw_label_dsc_t dsc;
+        lv_draw_label_dsc_init(&dsc);
+        dsc.font = font;
+        dsc.text = text;
+
+        // A one-pixel black shadow keeps white text legible on the pale face,
+        // now that there is no dark slab behind it.
+        dsc.color = lv_color_black();
+        dsc.opa = LV_OPA_COVER;
+        area.x1 += 1;
+        area.y1 += 1;
+        area.x2 += 1;
+        area.y2 += 1;
         lv_draw_label(&layer, &dsc, &area);
+
+        dsc.color = lv_color_white();
+        area.x1 -= 1;
+        area.y1 -= 1;
+        area.x2 -= 1;
+        area.y2 -= 1;
+        lv_draw_label(&layer, &dsc, &area);
+
         y += size.y + 2;
     }
     lv_canvas_finish_layer(banner_canvas_, &layer);
 
     // Same transform the frame generator applies: rotate counter-clockwise 90
-    // degrees, then mirror left-right.
-    const auto* src = reinterpret_cast<const uint16_t*>(banner_canvas_buf_);
-    auto* dst = reinterpret_cast<uint16_t*>(banner_image_buf_);
+    // degrees, then mirror left-right. ARGB8888, so four bytes move together.
+    const auto* src = reinterpret_cast<const uint32_t*>(banner_canvas_buf_);
+    auto* dst = reinterpret_cast<uint32_t*>(banner_image_buf_);
     for (int sy = 0; sy < kH; sy++) {
         for (int sx = 0; sx < kW; sx++) {
             const int dx = kH - 1 - sy;
