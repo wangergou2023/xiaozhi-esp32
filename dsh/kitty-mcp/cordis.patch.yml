@@ -1,0 +1,18 @@
+# Kitty MCP bundle: connects the ESP32 desk pet to DSH over its USB serial
+# protocol. The server is scripts/pet_mcp.py in the firmware repository; it turns
+# each tool call into one pet.* JSON-RPC request on the port.
+#
+# Paths are absolute on purpose: the bundle is installed into this profile and
+# the server has to find both a Python with pyserial and the script.
+- insert:
+    - id: kitty-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: kitty
+        transport: stdio
+        command: 'C:\Users\wangergou\.espressif\python_env\idf6.1_py3.12_env\Scripts\python.exe'
+        args:
+          - 'C:\Users\wangergou\Documents\kitty\xiaozhi-esp32\scripts\pet_mcp.py'
+        env:
+          KITTY_PORT: COM3
+        failOnStartupError: true

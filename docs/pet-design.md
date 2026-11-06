@@ -752,3 +752,30 @@ Microsoft Huihui 是拼接式老语音，经 0.85 寸小喇叭糊成一片；换
   改它们会连带影响 LVGL 的所有图层；
 - `scripts/gen_pet_frames.py` 里 `MIRROR_X = True` 保证以后重新生成帧不会把这个镜像丢掉；
 - 实机确认：Kitty 的朝向由面向左变成面向右，用户验收通过。
+
+### 接入 DSH（MCP）
+
+除了 `petctl.py`（一次调用一条请求）和 `pet_agent.py`（脚本跑全部原语），还有第三条路：
+把设备协议包成 **MCP server**，让 agent 框架原生调用。
+
+- `scripts/pet_mcp.py`：stdio JSON-RPC，实现 `initialize` / `tools/list` / `tools/call`，
+  16 个工具一一对应 `pet.*` 原语；
+- `dsh/kitty-mcp/`：只有配置的 DSH bundle，把上面的 server 注册成
+  `@deepseek-ai/dsh-mcp-client` 的一行配置（`transport: stdio`、`command`、`args`、`env`）。
+
+关键设计：**连接是持久的，并且带心跳。** MCP 的一次 `tools/call` 只是打开串口、发一条、
+关掉；那样每次调用之间都会超过 3 秒，她会掉回 `autonomous` 并把 agent 设的表情覆盖掉。
+所以 server 首次调用时建立连接、发 `pet.hello` 接管，然后后台每秒 `pet.ping`，
+直到进程退出才关端口。
+
+实测（通过 DSH 原生工具调用，不经过 shell）：
+
+```
+pet_status  -> mode: remote           # hello + 心跳生效，持续接管
+pet_time    -> minute_of_day 1317      # agent 负责对时
+pet_task done -> energy 96 -> 91       # 咬合正确
+pet_face happy -> ok                   # 表情不再被本地循环覆盖
+pet_night on  -> night: true
+pet_face angry -> -32001               # 夜间拒绝，错误穿到工具层
+pet_wake      -> ok
+```

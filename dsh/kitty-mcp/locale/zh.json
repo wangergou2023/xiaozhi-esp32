@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kitty 桌面宠物",
+    "description": "通过 USB 串口协议驱动 ESP32 上的 Kitty：读她的身体状态、换表情、喂她、让她说话、哄她睡觉。"
+  }
+}

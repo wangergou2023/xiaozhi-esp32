@@ -337,6 +337,25 @@ agent 还负责两件事：`pet.time` 把时间对给她（她没有 RTC，也�
 
 > 未决：要不要支持新连接抢占旧连接？以及音频缓冲带来的实际延迟是多少——两者都要真机测试后才能定。
 
+### 12.9 接 DSH（MCP）
+
+如果 agent 是 **DeepSeek Harness（DSH）**，不用写脚本，插件已经做好了：
+
+| 步骤 | 做什么 |
+| --- | --- |
+| 1 | 仓库里 `dsh/kitty-mcp/` 是一个只有配置的 DSH bundle |
+| 2 | 在 DSH 里装它（`plugin_manager install_bundle`，指向这个目录） |
+| 3 | 装完立刻多出 16 个 `mcp__kitty__*` 工具，直接调用 |
+
+工具覆盖全部原语：`pet_status`、`pet_face`、`pet_look`、`pet_attention`、`pet_feed`、
+`pet_clean`、`pet_play`、`pet_task`、`pet_sleep`、`pet_wake`、`pet_night`、`pet_volume`、
+`pet_time`、`pet_say`、`pet_mic_stats`、`pet_ping`。
+
+背后的 `scripts/pet_mcp.py` 是个 stdio MCP server，它做了一件普通脚本不会做的事：
+**开着串口不放，每秒 ping 一次**。所以她会在 agent 连着的时候一直保持"被接管"，
+不会每隔 3 秒就掉回自主模式、把 agent 设的表情自己盖掉。DSH 退出后端口关闭，
+3 秒内她就回到自己的生活。
+
 ## 13. 供电与功耗
 
 ### 怎么供电

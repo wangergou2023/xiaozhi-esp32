@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kitty Desk Pet",
+    "description": "Drives the ESP32 kitty over its USB serial protocol: read her body, set her face, feed her, make her speak, put her to bed."
+  }
+}

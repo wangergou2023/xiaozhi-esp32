@@ -1,0 +1,19 @@
+{
+  "name": "dsh-kitty-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kitty desk pet over USB serial, exposed to DSH as MCP tools.",
+  "type": "module",
+  "files": ["cordis.patch.yml", "locale/", "icon.svg"],
+  "exports": {
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": ["dsh-plugin", "mcp", "esp32", "desk-pet"],
+  "license": "MIT"
+}
