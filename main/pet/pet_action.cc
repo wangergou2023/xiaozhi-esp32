@@ -345,9 +345,10 @@ void Action::PushColor(uint8_t red, uint8_t green, uint8_t blue, float factor) {
     const uint8_t r = scale(red);
     const uint8_t g = scale(green);
     const uint8_t b = scale(blue);
-    if (r == led_r_ && g == led_g_ && b == led_b_ && !led_dirty_) {
-        return;
-    }
+    // No "same colour" shortcut here: the strip is shared with the assistant
+    // layer's Led object, and a stale cache would leave whatever it wrote last
+    // on screen. One WS2812 refresh costs microseconds.
+
     led_r_ = r;
     led_g_ = g;
     led_b_ = b;

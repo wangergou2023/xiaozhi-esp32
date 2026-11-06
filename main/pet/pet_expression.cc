@@ -46,26 +46,26 @@ Look LookForStatus(const Status& status) {
             look.frame = 2;
             look.breath_px = 0.7f;
             look.red = 26;   // a faint ember, not a dead lamp
-            look.green = 12;
-            look.blue = 6;
+            look.green = 8;
+            look.blue = 3;
             look.screen_level = 4;
             break;
         case Mood::kSleepy:
             look.clip = Clip::kFail;
             look.frame_ms = 220;
             look.breath_px = 2.2f;
-            look.red = 90;
-            look.green = 110;
-            look.blue = 200;
+            look.red = 40;
+            look.green = 50;
+            look.blue = 190;
             look.screen_level = 45;
             break;
         case Mood::kTired:
             look.clip = Clip::kWait;
             look.frame_ms = 190;
             look.breath_px = 2.0f;
-            look.red = 120;
-            look.green = 140;
-            look.blue = 210;
+            look.red = 60;
+            look.green = 90;
+            look.blue = 255;
             look.screen_level = 55;
             break;
         case Mood::kHungry:
@@ -73,23 +73,23 @@ Look LookForStatus(const Status& status) {
             look.frame_ms = 130;
             look.breath_px = 1.8f;
             look.red = 255;
-            look.green = 110;
-            look.blue = 30;
+            look.green = 60;
+            look.blue = 10;
             break;
         case Mood::kDirty:
             look.clip = Clip::kIdle;
             look.frame_ms = 170;
             look.red = 150;
-            look.green = 120;
-            look.blue = 70;
+            look.green = 105;
+            look.blue = 20;
             break;
         case Mood::kLonely:
             look.clip = Clip::kIdle;
             look.frame_ms = 190;
             look.breath_px = 1.0f;
-            look.red = 90;
-            look.green = 90;
-            look.blue = 150;
+            look.red = 30;
+            look.green = 150;
+            look.blue = 160;
             look.screen_level = 60;
             break;
         case Mood::kHappy:
@@ -97,16 +97,16 @@ Look LookForStatus(const Status& status) {
             look.frame_ms = 95;
             look.breath_px = 2.4f;
             look.red = 255;
-            look.green = 175;
-            look.blue = 90;
+            look.green = 200;
+            look.blue = 20;
             break;
         case Mood::kContent:
         default:
             look.clip = Clip::kIdle;
             look.frame_ms = 140;
             look.red = 255;
-            look.green = 208;
-            look.blue = 160;
+            look.green = 140;
+            look.blue = 40;
             break;
     }
     return look;
