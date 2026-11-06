@@ -212,14 +212,15 @@ void PetAudio::Fill(int16_t* out, int samples) {
     for (int i = 0; i < samples; i++) {
         float mixed = 0.0f;
 
-        if (night_ && night_noise_) {
-            // Night bed: her own purr, swelling and fading with slow breathing.
+        if ((night_ || sleeping_) && night_noise_) {
+            // Her own purr, swelling and fading with slow breathing: at night,
+            // and whenever she has dropped off for a nap.
             breath_phase_ += 1.0f / static_cast<float>(sample_rate_);
             if (breath_phase_ >= kBreathPeriod) {
                 breath_phase_ -= kBreathPeriod;
             }
             const float swell = 0.55f + 0.45f * (0.5f + 0.5f * sinf(kTwoPi * breath_phase_ / kBreathPeriod - kPi * 0.5f));
-            mixed += purr_sample() * 0.42f * swell;
+            mixed += purr_sample() * 0.62f * swell;
         }
 
         // Host-pushed PCM plays on top of everything else.
@@ -269,6 +270,10 @@ void PetAudio::SetNightNoise(bool noise) {
     night_noise_ = noise;
     Settings settings("pet", true);
     settings.SetBool("night_noise", noise);
+}
+
+void PetAudio::SetSleeping(bool on) {
+    sleeping_ = on;
 }
 
 void PetAudio::SetNight(bool on) {

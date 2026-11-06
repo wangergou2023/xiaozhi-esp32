@@ -33,7 +33,7 @@ constexpr float kSaveInterval = 60.0f;
 
 // Energy thresholds. Below kSleepAt she drops off by herself, below kWakeAt she
 // cannot be woken by a poke (docs: "精力见底会强制睡着，叫不醒").
-constexpr float kSleepAt = 3.0f;
+constexpr float kSleepAt = 20.0f;  // she drops off long before empty
 constexpr float kWakeAt = 85.0f;
 constexpr float kCannotWakeBelow = 30.0f;
 

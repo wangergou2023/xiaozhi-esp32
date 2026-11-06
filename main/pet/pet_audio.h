@@ -41,6 +41,8 @@ public:
     // Night mode swaps the voice for an algorithmic bed: slow breathing hiss.
     // `noise` can be turned off so the night is silent except for her breathing.
     void SetNight(bool on);
+    // A daytime nap purrs too, not just the night bed.
+    void SetSleeping(bool on);
     void SetNightNoise(bool noise);
 
     // 0-100, also written to NVS so it survives a reboot.
@@ -75,6 +77,7 @@ private:
     int volume_ = 60;
 
     volatile bool night_ = false;
+    volatile bool sleeping_ = false;
     volatile bool night_noise_ = true;
     bool started_ = false;
 

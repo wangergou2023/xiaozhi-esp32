@@ -389,6 +389,7 @@ void Run() {
             pattern = Action::LedPattern::kSlowBreath;
         }
         Action::Get().SetLedPattern(pattern);
+        PetAudio::Get().SetSleeping(status.sleeping);
         Action::Get().SetHud(static_cast<int>(status.affection), static_cast<int>(status.hunger),
                              Gateway::Get().active(), status.mode != Mode::kAutonomous,
                              Battery::Get().Percent());
