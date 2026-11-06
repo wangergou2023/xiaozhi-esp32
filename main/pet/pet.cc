@@ -361,7 +361,7 @@ void Run() {
         } else {
             const Intent intent = g_behavior.Tick(dt, status);
             if (intent != Intent::kNone) {
-                ESP_LOGD(TAG, "herself: %s", ToName(intent));
+                ESP_LOGI(TAG, "herself: %s", ToName(intent));
                 look = LookForIntent(intent, status);
             } else {
                 look = LookForStatus(status);
