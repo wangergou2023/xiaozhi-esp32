@@ -236,7 +236,7 @@ button:active{transform:scale(.995)}
     html += Card("时间", clock);
 
     html += R"HTML(<div class="bar"><button type="submit">保存并关闭热点</button>
-<p class="foot">只在这里改参数；她不联网，热点只是短命的设置通道。</p></div>
+<p class="foot">只在这里改参数；她不联网，热点只是短暂的设置通道。</p></div>
 </form></div><script>
 for (const id of ['volume','brightness']) {
   const input = document.getElementById(id);
