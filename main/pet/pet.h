@@ -12,9 +12,12 @@ class Lamp;
 enum class Gesture : uint8_t {
     kBootClick,        // 摸摸头
     kBootDoubleClick,  // 喂食
-    kBootLongPress,    // 配网
-    kPowerClick,       // 清洁 / 陪玩，自动挑最急的一条
-    kPowerLongPress,   // 夜间模式
+    kBootLongPress,    // 配网热点开/关（配网中单击 = 关掉）
+    // POWER is the power latch on this board, so it has no gestures. It cannot
+    // be read by the firmware at all (docs/pet-design.md §8).
+    // There is deliberately no triple click: the button library does not
+    // distinguish three clicks from a double plus a single here, so a "triple"
+    // gesture would fire as something else half the time.
 };
 
 // The board hands over its one RGB LED. Call this before Run().

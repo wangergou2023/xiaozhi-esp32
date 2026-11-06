@@ -61,8 +61,6 @@ const char* GestureName(Gesture gesture) {
         case Gesture::kBootClick: return "boot_click";
         case Gesture::kBootDoubleClick: return "boot_double_click";
         case Gesture::kBootLongPress: return "boot_long_press";
-        case Gesture::kPowerClick: return "power_click";
-        case Gesture::kPowerLongPress: return "power_long_press";
     }
     return "unknown";
 }

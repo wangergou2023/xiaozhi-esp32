@@ -6,6 +6,7 @@
 
 #include <driver/usb_serial_jtag.h>
 #include <esp_log.h>
+#include <esp_random.h>
 #include <esp_heap_caps.h>
 #include <nvs.h>
 #include <esp_timer.h>
@@ -99,6 +100,17 @@ void HandleGesture(Gesture gesture) {
     // The host hears about every gesture, whether or not it owns the face.
     AgentLink::Get().OnGesture(gesture, status);
 
+    // While the configuration hotspot is up, a click means "I'm done here":
+    // close the radio and take the banner away. It is a control action, not a
+    // pet, so it must not also count as affection.
+    if (Gateway::Get().active() && gesture == Gesture::kBootClick) {
+        Gateway::Get().Stop();
+        Action::Get().HideBanner();
+        PetAudio::Get().Play(Voice::kHappy);
+        ESP_LOGI(TAG, "Configuration closed by a click");
+        return;
+    }
+
     // A touch in the middle of the night is how you wake her up.
     if (g_night) {
         ApplyNight(false, "touched");
@@ -106,14 +118,34 @@ void HandleGesture(Gesture gesture) {
     }
 
     switch (gesture) {
-        case Gesture::kBootClick:
+        case Gesture::kBootClick: {
             core.Poke();
-            PetAudio::Get().Play(Voice::kMeow);
-            ESP_LOGI(TAG, "Petted");
-            if (!core.status().sleeping) {
-                ReactionLook(Clip::kWave, 110, 1.2f, status);
+            if (core.status().sleeping) {
+                break;
+            }
+            // A pet is never the same twice: she picks one of four reactions.
+            // The affection is always the same; only what you see changes.
+            const int variant = static_cast<int>(esp_random() % 4);
+            ESP_LOGI(TAG, "Petted (reaction %d)", variant);
+            switch (variant) {
+                case 0:
+                    PetAudio::Get().Play(Voice::kMeow);
+                    ReactionLook(Clip::kWave, 110, 1.2f, status);
+                    break;
+                case 1:
+                    PetAudio::Get().Play(Voice::kHappy);
+                    ReactionLook(Clip::kJump, 95, 1.0f, status);
+                    break;
+                case 2:
+                    PetAudio::Get().Play(Voice::kPurr);
+                    ReactionLook(Clip::kReview, 160, 1.4f, status);
+                    break;
+                default:
+                    ReactionLook(Clip::kIdle, 140, 1.0f, status);
+                    break;
             }
             break;
+        }
         case Gesture::kBootDoubleClick:
             core.Feed();
             PetAudio::Get().Play(Voice::kChew);
@@ -133,24 +165,6 @@ void HandleGesture(Gesture gesture) {
             } else {
                 PetAudio::Get().Play(Voice::kSigh);
             }
-            break;
-        case Gesture::kPowerClick: {
-            // Clean or play, whichever is more urgent right now.
-            if (status.clean <= status.affection) {
-                core.Clean();
-                ESP_LOGI(TAG, "Cleaned");
-            } else {
-                core.Play();
-                ESP_LOGI(TAG, "Played");
-            }
-            if (!core.status().sleeping) {
-                ReactionLook(Clip::kJump, 95, 1.0f, status);
-            }
-            break;
-        }
-        case Gesture::kPowerLongPress:
-            ESP_LOGW(TAG, "Night mode is not implemented yet");
-            ReactionLook(Clip::kFail, 220, 1.5f, status);
             break;
     }
     g_behavior.NoteInteraction();
