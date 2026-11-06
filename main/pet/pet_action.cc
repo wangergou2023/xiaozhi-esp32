@@ -10,6 +10,8 @@
 #include <esp_random.h>
 #include <lvgl.h>
 
+LV_FONT_DECLARE(font_material_symbols_14_1);
+
 #include "backlight.h"
 #include "board.h"
 #include "settings.h"
@@ -111,18 +113,6 @@ const char* const kBatteryRows[] = {
     "###########...",
 };
 constexpr int kBatteryRowsCount = 5;
-
-// The classic WiFi fan: three arcs and a dot, symmetric about the centre.
-const char* const kWifiRows[] = {
-    "......###......",
-    "....##...##....",
-    "..##..###..##..",
-    "..#.##...##.#..",
-    ".#.##.###.##.#.",
-    ".#.#.#...#.#.#.",
-    ".......#.......",
-};
-constexpr int kWifiRowsCount = 7;
 
 const char* const kBowlRows[] = {
     "..................",
@@ -489,11 +479,23 @@ void Action::DrawHudLocked() {
     DrawRows(hud_canvas_, 13, 64, kBatteryRows, kBatteryRowsCount, battery_on,
              lv_color_hex(0x2A2A30), hud_battery_ >= 0 ? hud_battery_ : 0);
 
-    // WiFi fan: bright while the hotspot is up, dim otherwise.
-    const lv_color_t wifi_on = lv_color_hex(0xC8C8D2);
-    const lv_color_t wifi_off = lv_color_hex(0x33333A);
-    DrawRows(hud_canvas_, 12, 85, kWifiRows, kWifiRowsCount, hud_wifi_ ? wifi_on : wifi_off,
-             hud_wifi_ ? wifi_on : wifi_off, 100);
+    // WiFi: the assistant's own Material Symbols glyph (U+E63E), white when the
+    // hotspot is up and grey when it is off, drawn into the canvas so it goes
+    // through the same rotate+mirror transform as everything else.
+    lv_layer_t wifi_layer;
+    lv_canvas_init_layer(hud_canvas_, &wifi_layer);
+    lv_draw_label_dsc_t wifi_dsc;
+    lv_draw_label_dsc_init(&wifi_dsc);
+    wifi_dsc.color = hud_wifi_ ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x33333A);
+    wifi_dsc.font = &font_material_symbols_14_1;
+    wifi_dsc.text = "\xE6\x98\xBE";
+    lv_area_t wifi_area = {};
+    wifi_area.x1 = 12;
+    wifi_area.y1 = 83;
+    wifi_area.x2 = 27;
+    wifi_area.y2 = 98;
+    lv_draw_label(&wifi_layer, &wifi_dsc, &wifi_area);
+    lv_canvas_finish_layer(hud_canvas_, &wifi_layer);
 
     // Rotate + mirror into the panel band, exactly like the face frames and the
     // configuration banner: dst_x = 127 - vy, dst_y = 39 - vx.
