@@ -31,9 +31,10 @@ supplies pins, the display, the LED and the buttons:
   `kitty::OnGesture()`;
 - nothing else. No behaviour belongs in this file.
 
-POWER (GP2) is deliberately **not** wired: the design's open item 1 asks whether
-that pin is part of the power latch. Clean / play / night mode have no entry point
-until that is confirmed.
+POWER (GP2) is **not usable from firmware**: it is the power latch. Pressing it
+cuts board power, pressing it again restores it, so the pin never reads as a button
+(confirmed on hardware, 2026-11-06). Every gesture has to live on BOOT; see
+`docs/pet-design.md` §8 for the single-button scheme.
 
 The 57 frames live in `main/pet/assets/pet_frames.bin` and are embedded with
 `EMBED_FILES`; see `docs/pet-design.md` for what the design does with them.
