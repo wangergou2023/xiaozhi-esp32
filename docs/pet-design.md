@@ -103,8 +103,10 @@ main/boards/       只做接线与初始化，不含业务逻辑
 
 ### 成长阶段
 
-由 `affection` 与总互动次数决定，共 3 阶段。每阶段解锁表情行与音效：
-幼体（动作笨拙、多睡）→ 成长（解锁主动搭话）→ 成熟（解锁全部表情与稳定人格）。
+由 `affection` 与总互动次数决定，共 3 阶段。**解锁的是行为意图，不是新的表情帧**：
+幼体只有张望与打瞌睡 → 成长加入伸懒腰 → 成熟再加入突然雀跃。
+
+表情素材仍是同一套 57 帧；要加新表情行意味着重做帧数据并重算 Flash 预算（§13）。
 
 **不做"养死"**。长时间不管，她只会进入"闹脾气"状态——变冷淡、不回应用、数值停在上限以下，
 但一次认真照顾就能拉回来。理由是：一台坏掉的桌面设备没有意义，情绪上的疏远比数值死亡更有力。
@@ -134,9 +136,18 @@ main/boards/       只做接线与初始化，不含业务逻辑
 | `pet.status` | — | 返回全部数值与模式 | 同左 |
 | `pet.poke` | 事件 | 按键/唤醒词触发 | 上报给 host |
 | `pet.sleep` / `pet.wake` | — | 精力见底 / 靠触摸 | agent 强制 |
+| `pet.night` | `on` | 作息时段或菜单 | agent 强制进入/退出夜间 |
+| `pet.task` | `ok` | — | agent 上报任务结果，换算成数值变化 |
+| `pet.time` | `epoch`, `tz_offset` | 配网页手动对时 | host 对时（更准，优先） |
+| `pet.volume` | `0–100` | 菜单 / 配网页 | host 调音量 |
+| `pet.config` | — | 菜单 | 让 host 打开配网页（方便测试） |
+| `pet.mic_stats` | — | — | 读麦克风电平与识别统计，调试用 |
 
-新增玩法优先组合既有原语；需要新原语时，先问"离线时它该做什么"——答不上来说明这个原语
-把玩法绑死在 agent 上了。
+另有调试能力：`pet.say` 带 `test: true` 时把音频直接喂给命令模型而不播放，
+用于在没有人工的条件下闭环验证唤醒链路。
+
+当前实现共 17 个方法（含 `pet.hello`、`pet.ping`）。新增玩法优先组合既有原语；
+需要新原语时，先问"离线时它该做什么"——答不上来说明这个原语把玩法绑死在 agent 上了。
 
 ## 8. 输入手势
 
@@ -177,7 +188,7 @@ main/boards/       只做接线与初始化，不含业务逻辑
 - **传输**：USB CDC 串口，一行一条 JSON（MCP stdio 风格的 JSON-RPC 2.0）
 - **握手**：host 发 `pet.hello` → 设备回 `status` + 固件版本 + 能力表。未握手不进入 `remote`
 - **心跳**：host 每 1 s 发 `pet.ping`；3 s 无输入即回 `autonomous`
-- **事件**：设备主动上报，无 `id`，如 `pet.poke`、`pet.state_changed`、`pet.tired`
+- **事件**：设备主动上报，无 `id`：`pet.poke`、`pet.called`、`pet.state_changed`、`pet.tired`
 
 ```json
 {"jsonrpc":"2.0","id":7,"method":"pet.face","params":{"emotion":"happy","intensity":0.8}}
@@ -217,8 +228,9 @@ A 的时段模式，也是原方案 D 的全部内容。到点进入，不需要
 
 **白噪音不占 Flash**：用算法生成（滤波噪声），几十行代码，不用存音频文件。
 
-**禁止项**：夜间不主动行为、不主动搭话、拒绝 `pet.say` 之外的一切 agent 请求；
-agent 在夜间只允许推极短的提示音（如任务完成），不允许连续输出。
+**禁止项**：夜间不主动行为、不主动搭话。**agent 在夜间一律禁言**——`pet.say` 也在拒绝名单里，
+只有 `pet.status`、`pet.ping`、`pet.wake`、`pet.night` 还会应答。半夜被提示音吵醒的代价，
+比"漏看一次任务完成"高得多。
 
 **退出**：作息时段结束、轻触按键、或 agent 显式 `pet.wake`，并给出起床表情。
 
@@ -239,7 +251,8 @@ WiFi 在本设计中**只是配网射频**，不是联网能力。
 | --- | --- |
 | `name` | 宠物名字（用于唤醒词与界面） |
 | `volume` / `brightness` | 音量、亮度 |
-| `wake_sensitivity` | 唤醒词灵敏度 |
+| `wake_phrase` | 唤醒词，拼音注册（默认 `ni hao xiao mi`） |
+| `wake_sensitivity` | 唤醒词灵敏度：低 / 中 / 高（对应 MultiNet 阈值） |
 | `sleep_window` | 作息时段（依赖时间源） |
 | `personality` | 行为权重档位：黏人 / 冷淡 / 活泼 |
 | `difficulty` | 数值衰减速率：轻松 / 正常 / 硬核 |
@@ -387,17 +400,18 @@ V3 之后不再做版本化规划。音效包、人格档、无线 transport、�
 | `pet.hello` | 返回名字、固件版本、能力表、完整状态；同时进入 `remote` |
 | 心跳 | 3 秒没有一行 JSON 就退出 `remote`，模式交还给「插没插 USB」的判断 |
 | 原语 | `pet.face` `pet.look` `pet.attention` `pet.status` `pet.feed` `pet.clean` `pet.play` `pet.task` `pet.sleep` `pet.wake` `pet.ping` |
-| 事件 | `pet.poke`（被摸）、`pet.state_changed`（数值/情绪/模式变了）、`pet.tired`（精力 < 15） |
+| 事件 | `pet.poke`（被摸）、`pet.called`（叫名字被听见）、`pet.state_changed`（数值/情绪/模式变了）、`pet.tired`（精力 < 15） |
 | 咬合 | `pet.task result=done` → 精力 −5、亲密度 +2；`result=error` → 精力 −8、亲密度 −1 |
 | 脚本 | `scripts/pet_agent.py` 假扮 host，把上面每一条都跑一遍 |
 
 与设计的偏差：
 
-1. **`pet.say` 没实现**（返回 -32601）。她要说话就得起音频栈，那是 V2 的事；
-   现在整机没有初始化 `AudioService`，是省电的一部分。
+1. **`pet.say` 已实现**（`agent_link.cc` 收 base64 PCM 分块 → `PetAudio::PlayPcm()`）。
+   host 每块最多 12 KB base64（约 0.3 s），标 `last` 后整段入队播放。
+   另有调试开关 `test`：不发声，直接把音频喂给命令模型，用来闭环验证识别链路。
 2. **`pet.look` 是整脸平移**，不是眼珠转动 —— 眼睛在帧里，切不出来。±8 px。
-3. **代劳只补一半**（§10.3 那条限制）没做：agent 调 `pet.feed` 就是完整的 +25，
-   和手摸一样。这条等 V3 的手势一起做，否则没有对照。
+3. **代劳上限已实现**：`kAgentCareCap = 85`，agent 代劳每次只补一半（`Feed` +12 对人工 +25），
+   且补到 85 就补不动，只有人能补满。
 4. **独占 / 抢占**没做：谁的 `pet.hello` 最后到谁说了算，不区分连接。
 5. **控制台从 UART0 挪到了 USB-Serial/JTAG。** 之前 USB 只是第二控制台，
    驱动没装、RX 的 64 字节 FIFO 没人取，host 一写就卡住。现在 USB 是唯一控制台，
@@ -417,8 +431,8 @@ V3 之后不再做版本化规划。音效包、人格档、无线 transport、�
 <- I (3520) PetCore: Mode remote -> docked
 ```
 
-`pet.say` 返回 -32601，未知方法同样；`pet.sleep`/`pet.wake` 让 `mood` 在
-`asleep` / `content` 之间切换，都被 `pet.state_changed` 报出来了。
+未知方法返回 -32601；`pet.sleep`/`pet.wake` 让 `mood` 在 `asleep` / `content` 之间切换，
+都被 `pet.state_changed` 报出来了。`pet.say` 是后加的，见上面第 1 条。
 
 ### V2 · 有脾气 + 会睡觉（大部分已实现）
 
