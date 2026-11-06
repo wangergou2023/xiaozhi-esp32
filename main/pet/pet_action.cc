@@ -30,9 +30,6 @@ constexpr float kPi = 3.14159265358979f;
 
 constexpr float kBreathPeriod = 4.5f;   // seconds per breath
 constexpr float kLedPeriod = 3.0f;      // seconds per LED pulse
-constexpr float kBlinkMin = 3.0f;
-constexpr float kBlinkMax = 9.0f;
-constexpr float kBlinkDuration = 0.12f;
 constexpr int32_t kMaxClipFrames = 8;   // widest row of the sheet
 
 uint8_t* g_blob = nullptr;
@@ -378,24 +375,15 @@ void Action::Tick(float dt) {
         breath_phase_ -= 2.0f * kPi;
     }
 
-    if (blink_left_ > 0.0f) {
-        blink_left_ -= dt;
-    } else {
-        blink_in_ -= dt;
-        if (blink_in_ <= 0.0f) {
-            blink_left_ = kBlinkDuration;
-            blink_in_ = kBlinkMin + (esp_random() % 6001) / 1000.0f * (kBlinkMax - kBlinkMin) / 6.0f;
-        }
-    }
+    // No synthetic blink: the artwork already closes its eyes in idle, wait and
+    // run, and squashing the whole frame reads as a hop rather than a blink.
 
     const int offset = static_cast<int>(lroundf(sinf(breath_phase_) * breath_px_)) + look_dy_;
-    const int32_t scale_y = blink_left_ > 0.0f ? kEyesClosed : kEyesOpen;
 
     DisplayLockGuard lock(display_);
     if (lock) {
         lv_obj_set_style_translate_x(image_, look_dx_, 0);
         lv_obj_set_style_translate_y(image_, offset, 0);
-        lv_obj_set_style_transform_scale_y(image_, scale_y, 0);
     }
 
     led_phase_ += dt * 2.0f * kPi / kLedPeriod;

@@ -21,8 +21,6 @@ public:
 
     // Shrink the face vertically by ~10% to read as a blink. The art has no
     // eyelid frames, so this is the closest honest option.
-    static constexpr int32_t kEyesOpen = 256;
-    static constexpr int32_t kEyesClosed = 230;
 
     void Attach(Display* display, Lamp* lamp, Backlight* backlight);
     bool ready() const { return image_ != nullptr; }
@@ -97,7 +95,6 @@ private:
     int look_dy_ = 0;
 
     float blink_in_ = 4.0f;
-    float blink_left_ = 0.0f;
 
     uint8_t level_ = 0;       // cached backlight level
     uint8_t red_ = 0, green_ = 0, blue_ = 0;

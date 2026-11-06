@@ -141,7 +141,10 @@ void HandleGesture(Gesture gesture) {
                     ReactionLook(Clip::kReview, 160, 1.4f, status);
                     break;
                 default:
-                    ReactionLook(Clip::kIdle, 140, 1.0f, status);
+                    // kIdle would be invisible here: it is usually the clip
+                    // already playing, and Play() ignores a repeat of the same
+                    // clip. Turn her head instead.
+                    ReactionLook(Clip::kRun, 190, 1.0f, status);
                     break;
             }
             break;

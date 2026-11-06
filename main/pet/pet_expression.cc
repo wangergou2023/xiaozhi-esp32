@@ -120,17 +120,21 @@ Look LookForIntent(Intent intent, const Status& status) {
             look.frame_ms = 140;
             break;
         case Intent::kLookAround:
-            look.clip = Clip::kWait;
-            look.frame_ms = 150;
+            // kRun is the head turning left and right; kWait just sways.
+            look.clip = Clip::kRun;
+            look.frame_ms = 190;
             break;
         case Intent::kYawn:
-            look.clip = Clip::kReview;
-            look.frame_ms = 240;
+            // kFail is the clip that closes its eyes and drops its head: a yawn.
+            // kReview is the one typing on a laptop, which is not a yawn.
+            look.clip = Clip::kFail;
+            look.frame_ms = 220;
             look.breath_px = 2.6f;
             break;
         case Intent::kStretch:
-            look.clip = Clip::kReview;
-            look.frame_ms = 200;
+            // Arms up and a rise: that is what a stretch looks like here.
+            look.clip = Clip::kJump;
+            look.frame_ms = 190;
             look.breath_px = 2.2f;
             break;
         case Intent::kHop:
