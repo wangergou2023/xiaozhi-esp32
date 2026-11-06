@@ -19,7 +19,7 @@ Intent PickIntent(const Status& status) {
         {Intent::kStretch, 12},
         {Intent::kYawn, 10},
         {Intent::kHop, 6},
-        {Intent::kDoze, 12},  // she is a sleepy cat: dozes even when fresh
+        {Intent::kDoze, 50},  // idle time is mostly napping
     };
 
     // Growth unlocks variety (design §6): a baby only looks around and sleeps,
